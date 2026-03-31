@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>Business — Indian Board Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Tiro+Devanagari+Hindi&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ LANDING PAGE ═══════════════════════════ -->
+<div id="landing" class="screen active">
+  <div class="landing-bg">
+    <div class="mandala mandala-1"></div>
+    <div class="mandala mandala-2"></div>
+    <div class="paisley-strip"></div>
+  </div>
+  <div class="landing-content">
+    <div class="logo-block">
+      <div class="logo-rupee">₹</div>
+      <h1 class="logo-title">BUSINESS</h1>
+      <p class="logo-subtitle">भारतीय व्यापार बोर्ड गेम</p>
+    </div>
+
+    <div class="landing-card">
+      <div class="tab-row">
+        <button class="tab active" data-tab="create">Create Game</button>
+        <button class="tab" data-tab="join">Join Game</button>
+      </div>
+
+      <div id="tab-create" class="tab-panel active">
+        <div class="field-group">
+          <label>Your Name</label>
+          <input type="text" id="create-player-name" placeholder="e.g. Rahul" maxlength="16"/>
+        </div>
+        <div class="field-group">
+          <label>Game ID <span class="hint">(share with friends)</span></label>
+          <div class="id-row">
+            <input type="text" id="create-game-id" placeholder="e.g. MUMBAI42" maxlength="12"/>
+            <button class="btn-gen" onclick="genId()">⚄</button>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="createGame()">CREATE ROOM</button>
+      </div>
+
+      <div id="tab-join" class="tab-panel">
+        <div class="field-group">
+          <label>Your Name</label>
+          <input type="text" id="join-player-name" placeholder="e.g. Priya" maxlength="16"/>
+        </div>
+        <div class="field-group">
+          <label>Game ID</label>
+          <input type="text" id="join-game-id" placeholder="Enter room code" maxlength="12"/>
+        </div>
+        <button class="btn-primary" onclick="joinGame()">JOIN ROOM</button>
+      </div>
+    </div>
+
+    <p class="landing-note">2–8 players · Real-time multiplayer · No download needed</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ LOBBY ══════════════════════════════════ -->
+<div id="lobby" class="screen">
+  <div class="lobby-header">
+    <div class="lobby-title">GAME ROOM</div>
+    <div class="lobby-id-badge">
+      <span>Room: </span><strong id="lobby-game-id">—</strong>
+      <button class="btn-copy" onclick="copyGameId()" title="Copy">⎘</button>
+    </div>
+  </div>
+  <div class="lobby-body">
+    <div class="player-list" id="lobby-player-list">
+      <!-- filled dynamically -->
+    </div>
+    <div class="lobby-info">
+      <p id="lobby-msg">Waiting for players… (min 2 to start)</p>
+    </div>
+    <button class="btn-primary" id="start-btn" onclick="startGame()" style="display:none">
+      🚀 START GAME
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ GAME SCREEN ════════════════════════════ -->
+<div id="game-screen" class="screen">
+
+  <!-- Top bar -->
+  <div class="game-topbar">
+    <div class="topbar-left">
+      <span class="game-logo">₹ BUSINESS</span>
+    </div>
+    <div class="topbar-center" id="phase-indicator">
+      <span class="phase-chip">YOUR TURN</span>
+    </div>
+    <div class="topbar-right">
+      <span id="topbar-room">Room: —</span>
+    </div>
+  </div>
+
+  <div class="game-layout">
+
+    <!-- LEFT PANEL: Player cards -->
+    <div class="side-panel left-panel" id="players-panel">
+      <div class="panel-title">PLAYERS</div>
+      <div id="player-cards-list"></div>
+    </div>
+
+    <!-- BOARD -->
+    <div class="board-wrapper">
+      <div class="board" id="board"></div>
+    </div>
+
+    <!-- RIGHT PANEL: Controls + Log -->
+    <div class="side-panel right-panel">
+      <div class="panel-title">CONTROLS</div>
+
+      <!-- Dice display -->
+      <div class="dice-display" id="dice-display">
+        <div class="die" id="die1">?</div>
+        <div class="die" id="die2">?</div>
+      </div>
+      <div class="dice-total" id="dice-total"></div>
+
+      <!-- Action buttons -->
+      <div class="action-btns" id="action-btns">
+        <button class="btn-action btn-roll"  id="btn-roll"  onclick="doRoll()"    disabled>🎲 ROLL</button>
+        <button class="btn-action btn-buy"   id="btn-buy"   onclick="doBuy()"     disabled>🏠 BUY</button>
+        <button class="btn-action btn-build" id="btn-build" onclick="openBuild()" disabled>🏗 BUILD</button>
+        <button class="btn-action btn-trade" id="btn-trade" onclick="openTrade()" disabled>🤝 TRADE</button>
+        <button class="btn-action btn-end"   id="btn-end"   onclick="doEnd()"     disabled>✅ END TURN</button>
+      </div>
+
+      <!-- Game Log -->
+      <div class="panel-title" style="margin-top:14px">LOG</div>
+      <div class="game-log" id="game-log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ MODALS ════════════════════════════════════════════ -->
+
+<!-- Buy popup -->
+<div class="modal-overlay" id="modal-buy">
+  <div class="modal-card">
+    <div class="modal-header modal-buy-header">🏡 PROPERTY FOR SALE</div>
+    <div class="modal-body">
+      <div class="prop-card" id="buy-prop-card">
+        <div class="prop-color-bar" id="buy-color-bar"></div>
+        <div class="prop-name" id="buy-prop-name">—</div>
+        <div class="prop-price" id="buy-prop-price">₹ —</div>
+        <div class="prop-rent-row"><span>Rent</span><span id="buy-prop-rent">₹ —</span></div>
+        <div class="prop-group-row" id="buy-prop-group"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal btn-confirm" onclick="confirmBuy()">BUY ₹<span id="buy-confirm-price">0</span></button>
+      <button class="btn-modal btn-cancel"  onclick="closeModal('modal-buy')">PASS</button>
+    </div>
+  </div>
+</div>
+
+<!-- Build house/hotel popup -->
+<div class="modal-overlay" id="modal-build">
+  <div class="modal-card modal-wide">
+    <div class="modal-header">🏗 BUILD / SELL</div>
+    <div class="modal-body">
+      <div class="build-list" id="build-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal btn-cancel" onclick="closeModal('modal-build')">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Trade popup -->
+<div class="modal-overlay" id="modal-trade">
+  <div class="modal-card modal-wide">
+    <div class="modal-header">🤝 PROPOSE TRADE</div>
+    <div class="modal-body">
+      <div class="trade-section">
+        <div class="trade-col">
+          <div class="trade-col-title">You Offer</div>
+          <div class="field-group">
+            <label>Cash (₹)</label>
+            <input type="number" id="trade-offer-money" value="0" min="0"/>
+          </div>
+          <div class="field-group">
+            <label>Your Properties</label>
+            <div class="prop-checkboxes" id="trade-offer-props"></div>
+          </div>
+        </div>
+        <div class="trade-arrow">⇄</div>
+        <div class="trade-col">
+          <div class="trade-col-title">You Want</div>
+          <div class="field-group">
+            <label>Cash (₹)</label>
+            <input type="number" id="trade-req-money" value="0" min="0"/>
+          </div>
+          <div class="field-group">
+            <label>Target Player</label>
+            <select id="trade-target-player"></select>
+          </div>
+          <div class="field-group">
+            <label>Their Properties</label>
+            <div class="prop-checkboxes" id="trade-req-props"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal btn-confirm" onclick="submitTrade()">SEND OFFER</button>
+      <button class="btn-modal btn-cancel"  onclick="closeModal('modal-trade')">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- Incoming trade popup -->
+<div class="modal-overlay" id="modal-trade-incoming">
+  <div class="modal-card modal-wide">
+    <div class="modal-header">📨 TRADE OFFER RECEIVED</div>
+    <div class="modal-body" id="incoming-trade-body"></div>
+    <div class="modal-footer">
+      <button class="btn-modal btn-confirm" onclick="respondTrade('accept')">✅ ACCEPT</button>
+      <button class="btn-modal btn-cancel"  onclick="respondTrade('reject')">❌ REJECT</button>
+    </div>
+  </div>
+</div>
+
+<!-- Win screen -->
+<div class="modal-overlay" id="modal-win">
+  <div class="modal-card modal-win-card">
+    <div class="win-fireworks">🎆</div>
+    <div class="win-title">विजेता!</div>
+    <div class="win-name" id="win-player-name">—</div>
+    <div class="win-subtitle">is the Business Tycoon!</div>
+    <button class="btn-primary" onclick="location.reload()">PLAY AGAIN</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
