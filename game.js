@@ -4,7 +4,7 @@
    ══════════════════════════════════════════════════════════════════════ */
 
 // ── CONFIG ────────────────────────────────────────────────────────────────
-const WS_URL   = 'http://localhost:8080/ws';  // change to your server URL
+const WS_URL   = 'business-game-backend-production.up.railway.app/ws';  // change to your server URL
 const APP_PRE  = '/app';
 const TOPIC    = '/topic';
 
