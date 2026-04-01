@@ -377,6 +377,7 @@ function buildBoard() {
       el.innerHTML = `
         <div class="corner-icon">${tile.icon}</div>
         <div class="corner-label">${tile.label}</div>
+        <div class="tile-tokens" id="tokens-${tile.pos}"></div>
       `;
     } else {
       el.classList.add(getSide(tile.pos));
@@ -490,8 +491,16 @@ function dismissEventModal() {
 function updateEventLog(state) {
   if (!state.lastEvent || state.lastEvent === lastEventText) return;
   lastEventText = state.lastEvent;
+
   addLog(`<span class="log-warn">📢 ${state.lastEvent}</span>`);
-  showToast(state.lastEvent);
+
+  // Show inside modal for CHANCE / TAX instead of toast
+  if (state.phase === 'CHANCE' || state.phase === 'TAX') {
+    const textEl = document.getElementById('event-modal-text');
+    if (textEl) textEl.textContent = state.lastEvent;
+  } else {
+    showToast(state.lastEvent);
+  }
 }
 
 // ── AUTO-SKIP TIMER ────────────────────────────────────────────────────────
