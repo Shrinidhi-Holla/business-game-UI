@@ -567,6 +567,7 @@ html, body {
   padding: 1px;
   z-index: 3;
 }
+
 .token {
   width: clamp(6px, 1.2vw, 14px);
   height: clamp(6px, 1.2vw, 14px);
@@ -575,7 +576,15 @@ html, body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.5);
   flex-shrink: 0;
 }
+.token.jumping {
+  animation: jump 0.18s ease;
+}
 
+@keyframes jump {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-12px); }
+  100% { transform: translateY(0); }
+}
 /* House/hotel icons on tile */
 .tile-buildings {
   position: absolute;

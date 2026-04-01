@@ -72,6 +72,7 @@ let myPlayerName   = '';
 let currentGameId  = '';
 let gameState      = null;
 let pendingTradeId = null;
+const previousPositions = {};
 
 // ── AUTO-SKIP TIMER STATE ─────────────────────────────────────────────────
 let skipTimerInterval  = null;
@@ -629,16 +630,73 @@ function getTileName(pos) {
 
 // ── BOARD TOKENS ───────────────────────────────────────────────────────────
 function renderBoardTokens(state) {
+  // Clear all tokens first
   document.querySelectorAll('.tile-tokens').forEach(el => el.innerHTML = '');
+
   (state.players || []).forEach((p, i) => {
-    const container = document.getElementById('tokens-' + p.pos);
-    if (!container) return;
-    const token = document.createElement('div');
-    token.className        = 'token' + (p.disconnected ? ' token-disconnected' : '');
-    token.style.background = p.disconnected ? '#555' : PLAYER_COLORS[i % 8];
-    token.title            = getPlayerName(p.id, state) + (p.disconnected ? ' (disconnected)' : '');
-    container.appendChild(token);
+    const prev = previousPositions[p.id];
+
+    // First render (no animation)
+    if (prev === undefined || prev === p.pos) {
+      placeTokenInstant(p, i, state);
+    } else {
+      animateMovement(p, i, prev, p.pos, state);
+    }
+
+    previousPositions[p.id] = p.pos;
   });
+}
+
+
+//Helper functions for pawn animation
+function placeTokenInstant(p, i, state) {
+  const container = document.getElementById('tokens-' + p.pos);
+  if (!container) return;
+
+  const token = document.createElement('div');
+  token.className = 'token';
+  token.style.background = PLAYER_COLORS[i % 8];
+  container.appendChild(token);
+}
+
+function animateMovement(p, i, from, to, state) {
+  let path = [];
+
+  if (to >= from) {
+    for (let pos = from + 1; pos <= to; pos++) path.push(pos);
+  } else {
+    // wrap around board
+    for (let pos = from + 1; pos < 40; pos++) path.push(pos);
+    for (let pos = 0; pos <= to; pos++) path.push(pos);
+  }
+
+  let step = 0;
+
+  function moveStep() {
+    if (step >= path.length) return;
+
+    const pos = path[step];
+
+    const container = document.getElementById('tokens-' + pos);
+    if (!container) return;
+
+    const token = document.createElement('div');
+    token.className = 'token jumping';
+    token.style.background = PLAYER_COLORS[i % 8];
+
+    // Clear previous token for this player
+    document.querySelectorAll('.token').forEach(t => {
+      if (t.dataset.player === p.id) t.remove();
+    });
+
+    token.dataset.player = p.id;
+    container.appendChild(token);
+
+    step++;
+    setTimeout(moveStep, 180); // speed control
+  }
+
+  moveStep();
 }
 
 // ── BOARD OWNERSHIP ────────────────────────────────────────────────────────
