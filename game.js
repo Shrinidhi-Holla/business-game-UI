@@ -83,6 +83,9 @@ let skipTargetPlayerId = null;
 let lastShownPhaseEvent = null;
 let lastEventText       = null;
 
+// ── PAWN JUMP: track previous positions to detect movement ────────────────
+const prevPlayerPositions = new Map();   // playerId → last known pos
+
 // ── SCREEN ROUTING ────────────────────────────────────────────────────────
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -634,9 +637,15 @@ function renderBoardTokens(state) {
     const container = document.getElementById('tokens-' + p.pos);
     if (!container) return;
     const token = document.createElement('div');
-    token.className        = 'token' + (p.disconnected ? ' token-disconnected' : '');
+    const moved = prevPlayerPositions.has(p.id) && prevPlayerPositions.get(p.id) !== p.pos;
+    token.className        = 'token' + (p.disconnected ? ' token-disconnected' : '') + (moved ? ' token-jump' : '');
     token.style.background = p.disconnected ? '#555' : PLAYER_COLORS[i % 8];
     token.title            = getPlayerName(p.id, state) + (p.disconnected ? ' (disconnected)' : '');
+    // Remove the class after the animation ends so it can re-trigger next move
+    if (moved) {
+      token.addEventListener('animationend', () => token.classList.remove('token-jump'), { once: true });
+    }
+    prevPlayerPositions.set(p.id, p.pos);
     container.appendChild(token);
   });
 }
