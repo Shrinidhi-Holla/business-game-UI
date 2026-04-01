@@ -229,6 +229,23 @@
   </div>
 </div>
 
+<!-- Chance / Tax event modal -->
+<div class="modal-overlay" id="modal-event">
+  <div class="modal-card">
+    <div class="modal-header" style="display:flex;align-items:center;gap:10px;justify-content:center">
+      <span id="event-modal-icon" style="font-size:28px">🎴</span>
+      <span id="event-modal-title">CHANCE CARD</span>
+    </div>
+    <div class="modal-body" style="text-align:center;padding:24px 20px">
+      <p id="event-modal-text" style="font-size:16px;line-height:1.6;color:#ffe;margin:0"></p>
+    </div>
+    <div class="modal-footer" style="justify-content:center">
+      <button id="event-modal-dismiss-btn" class="btn-modal btn-confirm"
+        onclick="dismissEventModal()">✅ Dismiss &amp; End Turn</button>
+    </div>
+  </div>
+</div>
+
 <!-- Win screen -->
 <div class="modal-overlay" id="modal-win">
   <div class="modal-card modal-win-card">

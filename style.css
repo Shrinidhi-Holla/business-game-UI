@@ -429,6 +429,17 @@ html, body {
   display: inline-block;
 }
 
+.pc-disconnected-badge {
+  font-size: 10px; color: #9e9e9e; background: rgba(100,100,100,0.2);
+  border: 1px solid #555; padding: 1px 6px; border-radius: 4px;
+  margin-top: 3px; display: inline-block;
+}
+
+.token-disconnected {
+  opacity: 0.4;
+  outline: 2px dashed #888;
+}
+
 /* ═══════════════════════ BOARD ══════════════════════════════════════════ */
 .board-wrapper {
   display: flex; align-items: center; justify-content: center;
