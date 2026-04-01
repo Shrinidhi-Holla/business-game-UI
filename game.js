@@ -73,7 +73,7 @@ let currentGameId  = '';
 let gameState      = null;
 let pendingTradeId = null;
 const previousPositions = {};
-
+let isAnimating = false;
 // ── AUTO-SKIP TIMER STATE ─────────────────────────────────────────────────
 let skipTimerInterval  = null;
 let skipTimerCountdown = 0;
@@ -436,8 +436,9 @@ function renderGame(state) {
   renderBoardBuildings(state);
   updateActionButtons(state, isMyTurn, phase);
   checkIncomingTrades(state);
+if (!isAnimating) {
   handlePhaseModals(state, isMyTurn);
-  updateEventLog(state);
+}  updateEventLog(state);
 }
 
 function isCurrentPlayer(state) {
@@ -671,9 +672,13 @@ function animateMovement(p, i, from, to, state) {
   }
 
   let step = 0;
+  isAnimating = true;
 
   function moveStep() {
-    if (step >= path.length) return;
+    if (step >= path.length) {
+      isAnimating = false;
+      return;
+    }
 
     const pos = path[step];
 
@@ -751,7 +756,9 @@ function updateActionButtons(state, isMyTurn, phase) {
       const prop = state.props[me.pos];
       if (prop && !prop.owner && me.money >= prop.price) {
         btnBuy.disabled = false;
-        showBuyPopup(prop, me);
+       if (!isAnimating) {
+         showBuyPopup(prop, me);
+       }
       }
     }
     btnBuild.disabled = false;
