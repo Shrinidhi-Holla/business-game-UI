@@ -83,7 +83,8 @@ let skipTargetPlayerId = null;
 // ── PHASE MODAL STATE ─────────────────────────────────────────────────────
 let lastShownPhaseEvent = null;
 let lastEventText       = null;
-
+let pendingModalState = null;
+let pendingIsMyTurn = false;
 // ── SCREEN ROUTING ────────────────────────────────────────────────────────
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -436,9 +437,13 @@ function renderGame(state) {
   renderBoardBuildings(state);
   updateActionButtons(state, isMyTurn, phase);
   checkIncomingTrades(state);
-if (!isAnimating) {
+if (isAnimating) {
+  pendingModalState = state;
+  pendingIsMyTurn = isMyTurn;
+} else {
   handlePhaseModals(state, isMyTurn);
-}  updateEventLog(state);
+}
+updateEventLog(state);
 }
 
 function isCurrentPlayer(state) {
@@ -677,6 +682,15 @@ function animateMovement(p, i, from, to, state) {
   function moveStep() {
     if (step >= path.length) {
       isAnimating = false;
+
+      // Trigger pending modal after animation
+      if (pendingModalState) {
+        setTimeout(() => {
+          handlePhaseModals(pendingModalState, pendingIsMyTurn);
+          pendingModalState = null;
+        }, 150); // small delay for smoothness
+      }
+
       return;
     }
 
@@ -756,7 +770,10 @@ function updateActionButtons(state, isMyTurn, phase) {
       const prop = state.props[me.pos];
       if (prop && !prop.owner && me.money >= prop.price) {
         btnBuy.disabled = false;
-       if (!isAnimating) {
+       if (isAnimating) {
+         pendingModalState = state;
+         pendingIsMyTurn = true;
+       } else {
          showBuyPopup(prop, me);
        }
       }
