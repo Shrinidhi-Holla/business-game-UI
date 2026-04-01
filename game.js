@@ -772,7 +772,7 @@ function openBuild() {
     openModal('modal-build');
     return;
   }
-
+//dummy
   myProps.forEach(prop => {
     const tile        = BOARD_TILES.find(t => t.pos === prop.pos);
     const color       = COLOR_MAP[prop.colorGroup] || '#ccc';
