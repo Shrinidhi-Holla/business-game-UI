@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<title>Business — Indian Board Game</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Tiro+Devanagari+Hindi&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Business — Indian Board Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Tiro+Devanagari+Hindi&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
@@ -95,6 +95,7 @@
     <div class="topbar-center" id="phase-indicator">
       <span class="phase-chip">YOUR TURN</span>
     </div>
+    <button class="btn-log-toggle" id="btn-log-toggle" onclick="toggleLog()" title="Game Log">📋</button>
     <div class="topbar-right">
       <span id="topbar-room">Room: —</span>
       <button class="btn-leave" id="btn-leave" onclick="confirmLeave()">🚪 LEAVE</button>
@@ -134,9 +135,8 @@
         <button class="btn-action btn-end"   id="btn-end"   onclick="doEnd()"     disabled>✅ END TURN</button>
       </div>
 
-      <!-- Game Log -->
-      <div class="panel-title" style="margin-top:14px">LOG</div>
-      <div class="game-log" id="game-log"></div>
+      <!-- Log lives in the sidebar — game-log id kept for JS compatibility -->
+      <div id="game-log" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -242,7 +242,7 @@
     </div>
     <div class="modal-footer" style="justify-content:center">
       <button id="event-modal-dismiss-btn" class="btn-modal btn-confirm"
-        onclick="dismissEventModal()">✅ Dismiss &amp; End Turn</button>
+              onclick="dismissEventModal()">✅ Dismiss &amp; End Turn</button>
     </div>
   </div>
 </div>
@@ -300,6 +300,16 @@
 
 <!-- Toast -->
 <div id="toast" class="toast"></div>
+
+<!-- Log sidebar -->
+<div class="log-overlay" id="log-overlay" onclick="toggleLog()"></div>
+<div class="log-sidebar" id="log-sidebar">
+  <div class="log-sidebar-header">
+    <span>📋 GAME LOG</span>
+    <button class="log-sidebar-close" onclick="toggleLog()">✕</button>
+  </div>
+  <div class="game-log" id="game-log-sidebar"></div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>

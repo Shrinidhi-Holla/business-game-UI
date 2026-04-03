@@ -377,6 +377,74 @@ html, body {
   overflow: hidden;
 }
 
+/* ── Log toggle button in topbar ── */
+.btn-log-toggle {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid #444;
+  border-radius: 8px;
+  color: white;
+  font-size: 16px;
+  width: 34px; height: 34px;
+  cursor: pointer;
+  transition: background .15s;
+  flex-shrink: 0;
+  position: relative;
+}
+.btn-log-toggle:hover { background: rgba(255,255,255,0.15); }
+
+@keyframes logPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,215,0,0.6); }
+  50%      { box-shadow: 0 0 0 6px rgba(255,215,0,0); }
+}
+.btn-log-toggle.log-pulse { animation: logPulse 0.6s ease-out; }
+
+/* ── Log sidebar ── */
+.log-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,0.4);
+}
+.log-overlay.log-overlay-visible { display: block; }
+
+.log-sidebar {
+  position: fixed;
+  top: 0; right: -340px; bottom: 0;
+  width: 320px;
+  background: #141414;
+  border-left: 2px solid #333;
+  z-index: 501;
+  display: flex; flex-direction: column;
+  transition: right .28s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: -8px 0 30px rgba(0,0,0,0.6);
+}
+.log-sidebar.log-open { right: 0; }
+
+.log-sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  background: linear-gradient(90deg, #1a1a1a, #2d1a00);
+  border-bottom: 2px solid var(--gold);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px; font-weight: 700; letter-spacing: 2px;
+  color: var(--gold); flex-shrink: 0;
+}
+.log-sidebar-close {
+  background: none; border: none; color: #aaa;
+  font-size: 16px; cursor: pointer; line-height: 1;
+  transition: color .15s;
+}
+.log-sidebar-close:hover { color: white; }
+
+/* ── Game log inside sidebar ── */
+#game-log-sidebar {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #aaa;
+}
+
 /* ═══════════════════════ SIDE PANELS ════════════════════════════════════ */
 .side-panel {
   background: #1e1e1e;
@@ -714,19 +782,11 @@ html, body {
 .btn-action:not(:disabled):active { transform: translateX(0); }
 
 /* ═══════════════════════ GAME LOG ═══════════════════════════════════════ */
-.game-log {
-  flex: 1;
-  overflow-y: auto;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #aaa;
-  min-height: 120px;
-  max-height: 200px;
-}
 .log-entry {
-  padding: 3px 0;
-  border-bottom: 1px solid #2a2a2a;
-  animation: fadeIn .3s ease;
+  padding: 4px 0;
+  border-bottom: 1px solid #222;
+  animation: fadeIn .25s ease;
+  word-break: break-word;
 }
 .log-entry .log-player { color: var(--gold); font-weight: 700; }
 .log-entry .log-action { color: white; }
@@ -734,7 +794,7 @@ html, body {
 .log-entry .log-money  { color: #4CAF50; }
 .log-entry .log-warn   { color: #ef5350; }
 
-@keyframes fadeIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 
 /* ═══════════════════════ MODALS ════════════════════════════════════════ */
 .modal-overlay {
@@ -962,30 +1022,159 @@ html, body {
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 
 /* ═══════════════════════ RESPONSIVE ════════════════════════════════════ */
+
+/* ── Tablet (≤900px): side panels collapse, controls go under board ── */
 @media (max-width: 900px) {
   .game-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: 1fr auto;
+    gap: 0;
+    padding: 4px;
     overflow-y: auto;
   }
+
+  /* Board takes full width, centered */
   .board-wrapper {
-    order: -1;
+    order: 1;
     padding: 4px;
+    justify-content: center;
   }
   .board {
-    width: min(96vw, 96vw);
-    height: min(96vw, 96vw);
+    width: min(92vw, 92vw);
+    height: min(92vw, 92vw);
   }
-  .left-panel { flex-direction: row; flex-wrap: wrap; overflow: visible; }
-  .player-card { min-width: 140px; flex: 1; }
-  .right-panel { max-height: none; }
-  .action-btns { flex-direction: row; flex-wrap: wrap; }
-  .btn-action { flex: 1; min-width: 80px; font-size: 12px; padding: 8px 6px; }
+
+  /* Left panel (players) — compact horizontal strip above board */
+  .left-panel {
+    order: 0;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: 90px;
+    gap: 6px;
+    padding: 6px;
+    background: #161616;
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid #333;
+  }
+  .left-panel .panel-title { display: none; }
+  .player-card {
+    min-width: 130px;
+    flex-shrink: 0;
+    padding: 6px 8px;
+  }
+  .pc-pos { display: none; }
+
+  /* Right panel (controls) — horizontal strip below board */
+  .right-panel {
+    order: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    max-height: none;
+    overflow: visible;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid #333;
+    background: #161616;
+    padding: 8px;
+    gap: 8px;
+  }
+  .right-panel .panel-title { display: none; }
+
+  .dice-display { margin: 0; }
+  .dice-total   { min-width: 60px; text-align: center; }
+
+  .action-btns {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex: 1;
+    gap: 4px;
+  }
+  .btn-action {
+    flex: 1; min-width: 70px;
+    font-size: 11px; padding: 8px 4px;
+    text-align: center;
+  }
 }
 
+/* ── Mobile (≤600px): player cards in board center, ultra-compact controls ── */
 @media (max-width: 600px) {
+  .game-topbar { padding: 6px 10px; }
+  .game-logo   { font-size: 15px; letter-spacing: 1px; }
+  .phase-chip  { font-size: 10px; padding: 3px 8px; }
+  #topbar-room { display: none; }
+
+  .game-layout {
+    grid-template-rows: 1fr auto;
+    padding: 2px;
+  }
+
+  /* Left panel hidden — player info moves into board center via JS */
+  .left-panel { display: none; }
+
+  /* Board fills width */
+  .board-wrapper { padding: 2px; }
+  .board {
+    width: min(99vw, 99vw);
+    height: min(99vw, 99vw);
+  }
+
+  /* Board center shows compact player cards */
+  .board-center {
+    overflow: hidden;
+    flex-direction: column;
+    justify-content: center;
+    padding: 4px;
+  }
+  .board-center-title { display: none; }
+
+  /* Compact player mini-cards injected into center */
+  .board-center-players {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    justify-content: center;
+    padding: 2px;
+  }
+  .mini-player-card {
+    background: rgba(0,0,0,0.65);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(255,255,255,0.15);
+    min-width: 70px;
+  }
+  .mini-player-card.active-turn {
+    border-color: var(--gold);
+    background: rgba(255,200,0,0.15);
+  }
+  .mini-player-card.bankrupt { opacity: 0.4; }
+  .mini-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%; flex-shrink: 0;
+  }
+  .mini-money { color: var(--gold); font-size: 9px; }
+
+  /* Controls — even more compact */
+  .right-panel { gap: 4px; padding: 6px; }
+  .die { width: 34px; height: 34px; font-size: 18px; }
+  .btn-action { font-size: 10px; padding: 6px 2px; min-width: 54px; }
+
+  /* Log sidebar full-screen on mobile */
+  .log-sidebar { width: 100%; right: -100%; }
+
+  /* Trade section stacks */
   .trade-section { flex-direction: column; }
-  .trade-arrow { align-self: center; transform: rotate(90deg); }
+  .trade-arrow   { align-self: center; transform: rotate(90deg); }
 }
 
 /* Scrollbar */

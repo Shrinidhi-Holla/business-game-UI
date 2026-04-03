@@ -551,6 +551,7 @@ function renderGame(state) {
 
   updatePhaseIndicator(state, isMyTurn);
   renderPlayerCards(state);
+  renderMiniPlayerCards(state);   // mobile board-center cards
   renderBoardTokens(state);
   renderBoardOwnership(state);
   renderBoardBuildings(state);
@@ -558,6 +559,42 @@ function renderGame(state) {
   checkIncomingTrades(state);
   handlePhaseModals(state, isMyTurn);
   updateEventLog(state);
+}
+
+// ── MOBILE: mini player cards inside board center ─────────────────────────
+function renderMiniPlayerCards(state) {
+  const center = document.querySelector('.board-center');
+  if (!center) return;
+  // Only render on small screens
+  if (window.innerWidth > 600) {
+    const existing = center.querySelector('.board-center-players');
+    if (existing) existing.remove();
+    return;
+  }
+  let container = center.querySelector('.board-center-players');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'board-center-players';
+    center.appendChild(container);
+  }
+  container.innerHTML = '';
+  (state.players || []).forEach((p, i) => {
+    const isCur = i === state.current;
+    const card  = document.createElement('div');
+    card.className = 'mini-player-card' +
+      (isCur      ? ' active-turn' : '') +
+      (p.bankrupt ? ' bankrupt'    : '');
+    const name  = getPlayerName(p.id, state);
+    const short = name.length > 8 ? name.slice(0, 7) + '…' : name;
+    card.innerHTML = `
+      <div class="mini-dot" style="background:${PLAYER_COLORS[i % 8]}"></div>
+      <div>
+        <div>${short}${p.id === myPlayerId ? ' <em style="color:#aaa;font-size:8px">you</em>' : ''}</div>
+        <div class="mini-money">₹${p.money.toLocaleString()}</div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
 }
 
 function isCurrentPlayer(state) {
@@ -1296,12 +1333,16 @@ function respondTrade(action) {
 function updateDiceDisplay(state) {
   if (!state.lastDice) return;
   const total = state.lastDice;
-  const d1    = Math.floor(Math.random() * Math.min(total - 1, 6)) + 1;
-  const d2    = total - d1;
-  const die1  = document.getElementById('die1');
-  const die2  = document.getElementById('die2');
+  // Both dice must be 1-6 and sum exactly to total.
+  // Valid d1 range: max(1, total-6) → min(6, total-1)
+  const lo = Math.max(1, total - 6);
+  const hi = Math.min(6, total - 1);
+  const d1 = lo + Math.floor(Math.random() * (hi - lo + 1));
+  const d2 = total - d1;  // guaranteed 1-6 by construction
+  const die1 = document.getElementById('die1');
+  const die2 = document.getElementById('die2');
   if (die1) die1.textContent = d1;
-  if (die2) die2.textContent = Math.min(d2, 6);
+  if (die2) die2.textContent = d2;
   const totalEl = document.getElementById('dice-total');
   if (totalEl) totalEl.textContent = `Total: ${total}`;
 }
@@ -1314,13 +1355,22 @@ window.renderGame = function(state) {
 
 // ── GAME LOG ────────────────────────────────────────────────────────────────
 function addLog(html) {
-  const log = document.getElementById('game-log');
+  // Write to the sidebar log; the hidden #game-log is just a compat stub
+  const log = document.getElementById('game-log-sidebar');
   if (!log) return;
   const entry = document.createElement('div');
   entry.className = 'log-entry';
   entry.innerHTML = html;
   log.prepend(entry);
-  while (log.children.length > 50) log.removeChild(log.lastChild);
+  while (log.children.length > 60) log.removeChild(log.lastChild);
+
+  // Pulse the log button to signal new activity when sidebar is closed
+  const btn = document.getElementById('btn-log-toggle');
+  if (btn && !document.getElementById('log-sidebar').classList.contains('log-open')) {
+    btn.classList.remove('log-pulse');
+    void btn.offsetWidth; // reflow to retrigger animation
+    btn.classList.add('log-pulse');
+  }
 }
 
 const originalHandleState = handleStateUpdate;
@@ -1528,6 +1578,15 @@ function showToast(msg) {
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+}
+
+// ── LOG SIDEBAR ────────────────────────────────────────────────────────────
+function toggleLog() {
+  const sidebar = document.getElementById('log-sidebar');
+  const overlay = document.getElementById('log-overlay');
+  const isOpen  = sidebar.classList.contains('log-open');
+  sidebar.classList.toggle('log-open', !isOpen);
+  overlay.classList.toggle('log-overlay-visible', !isOpen);
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
