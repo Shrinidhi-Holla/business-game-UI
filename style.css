@@ -581,6 +581,10 @@ html, body {
   padding: 1px;
   z-index: 3;
 }
+/* ── Monopoly-style step-by-step pawn movement ───────────────────────────
+   The JS moves the pawn one tile at a time. Each single-tile move plays
+   this arc: lift off → float across → land with a squish.             */
+
 .token {
   width: clamp(6px, 1.2vw, 14px);
   height: clamp(6px, 1.2vw, 14px);
@@ -588,14 +592,47 @@ html, body {
   border: 1px solid white;
   box-shadow: 0 1px 3px rgba(0,0,0,0.5);
   flex-shrink: 0;
+  position: relative;
+  transform-origin: bottom center;
 }
-@keyframes tokenJump {
-  0%   { transform: translateY(0)    scale(1); }
-  30%  { transform: translateY(-9px) scale(1.2); }
-  60%  { transform: translateY(-3px) scale(1.05); }
-  100% { transform: translateY(0)    scale(1); }
+
+/* 1. The hop arc — token rises and falls over one tile-step */
+@keyframes tokenHop {
+  0%   { transform: translateY(0)     scaleX(1)    scaleY(1);    }
+  20%  { transform: translateY(-14px) scaleX(0.85) scaleY(1.15); }
+  50%  { transform: translateY(-18px) scaleX(0.9)  scaleY(1.1);  }
+  80%  { transform: translateY(-6px)  scaleX(1.05) scaleY(0.95); }
+  90%  { transform: translateY(0)     scaleX(1.15) scaleY(0.85); } /* squish */
+  100% { transform: translateY(0)     scaleX(1)    scaleY(1);    }
 }
-.token.token-jump { animation: tokenJump 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+/* 2. Shadow grows when pawn is airborne */
+@keyframes tokenShadow {
+  0%,100% { transform: scaleX(1);   opacity: 0.5; }
+  50%     { transform: scaleX(0.4); opacity: 0.15; }
+}
+
+/* Token shadow element — injected by JS as a sibling */
+.token-shadow {
+  width: clamp(6px, 1.2vw, 14px);
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.3);
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+/* Hop class toggled per step */
+.token.token-hop {
+  animation: tokenHop 0.22s cubic-bezier(0.33, 0, 0.66, 1) forwards;
+  z-index: 10;
+}
+.token.token-hop + .token-shadow {
+  animation: tokenShadow 0.22s ease-in-out forwards;
+}
 
 /* House/hotel icons on tile */
 .tile-buildings {

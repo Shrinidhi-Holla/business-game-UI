@@ -88,6 +88,21 @@ let lastEventText       = null;
 const prevPlayerPositions = new Map();  // playerId → last board pos
 const autoSkipCounts      = new Map();  // playerId → consecutive auto-skips seen
 
+// ── ANIMATION GATE ────────────────────────────────────────────────────────
+// While pawns are stepping across the board, all modal triggers are deferred.
+let isAnimating        = false;
+let pendingModalQueue  = [];   // [{fn}] — fns to call after animation finishes
+
+function queueModal(fn) {
+  if (isAnimating) { pendingModalQueue.push(fn); }
+  else fn();
+}
+
+function flushModalQueue() {
+  const q = pendingModalQueue.splice(0);
+  q.forEach(fn => fn());
+}
+
 // ── SCREEN ROUTING ────────────────────────────────────────────────────────
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -384,14 +399,14 @@ function handleStateUpdate(state) {
     clearReconnectStorage();
     const msg = document.getElementById('kicked-msg');
     if (msg) msg.textContent = `You were removed after ${MAX_AUTO_SKIPS} consecutive missed turns.`;
-    setTimeout(() => openModal('modal-kicked'), 800);
+    queueModal(() => setTimeout(() => openModal('modal-kicked'), 400));
     return;
   }
 
   if (state.finished) {
     document.getElementById('win-player-name').textContent =
       getPlayerName(state.winner, state);
-    openModal('modal-win');
+    queueModal(() => openModal('modal-win'));
   }
 }
 
@@ -561,7 +576,7 @@ function handlePhaseModals(state, isMyTurn) {
   if (phase === 'CHANCE' || phase === 'TAX') {
     if (lastShownPhaseEvent === eventKey) return;
     lastShownPhaseEvent = eventKey;
-    showEventModal(phase, state.lastEvent, isMyTurn);
+    queueModal(() => showEventModal(phase, state.lastEvent, isMyTurn));
   } else {
     closeModal('modal-event');
   }
@@ -810,22 +825,118 @@ function getTileName(pos) {
   return tile.name || tile.label || '';
 }
 
-// ── BOARD TOKENS ───────────────────────────────────────────────────────────
+// ── BOARD TOKENS — step-by-step monopoly-style movement ───────────────────
+const HOP_DURATION_MS = 220;   // ms per tile step (matches CSS animation)
+const HOP_PAUSE_MS    = 40;    // brief pause between steps
+
+/**
+ * Place a token element on a tile, with optional shadow element.
+ * Returns the token div.
+ */
+function placeToken(playerId, pos, colorIdx, disconnected) {
+  // Remove any existing token for this player
+  document.querySelectorAll(`.token[data-pid="${CSS.escape(playerId)}"]`).forEach(el => {
+    el.nextElementSibling?.classList.contains('token-shadow') && el.nextElementSibling.remove();
+    el.remove();
+  });
+
+  const container = document.getElementById('tokens-' + pos);
+  if (!container) return null;
+
+  const token = document.createElement('div');
+  token.className        = 'token' + (disconnected ? ' token-disconnected' : '');
+  token.style.background = disconnected ? '#555' : PLAYER_COLORS[colorIdx % 8];
+  token.dataset.pid      = playerId;
+  token.title            = playerId;
+
+  // Shadow element for squish effect
+  const shadow = document.createElement('div');
+  shadow.className = 'token-shadow';
+
+  container.appendChild(token);
+  container.appendChild(shadow);
+  return token;
+}
+
+/**
+ * Animate a pawn stepping one tile at a time from oldPos → newPos.
+ * Calls onDone() when all hops complete.
+ */
+function animateTokenSteps(playerId, fromPos, toPos, colorIdx, disconnected, onDone) {
+  const BOARD = 40;
+  // Build the list of intermediate positions
+  const steps = [];
+  let cur = fromPos;
+  while (cur !== toPos) {
+    cur = (cur + 1) % BOARD;
+    steps.push(cur);
+  }
+  if (steps.length === 0) { onDone(); return; }
+
+  let stepIdx = 0;
+
+  function doStep() {
+    const pos   = steps[stepIdx];
+    const token = placeToken(playerId, pos, colorIdx, disconnected);
+    if (!token) { onDone(); return; }
+
+    // Trigger hop animation
+    token.classList.add('token-hop');
+    token.addEventListener('animationend', () => {
+      token.classList.remove('token-hop');
+      stepIdx++;
+      if (stepIdx < steps.length) {
+        setTimeout(doStep, HOP_PAUSE_MS);
+      } else {
+        onDone();
+      }
+    }, { once: true });
+  }
+
+  doStep();
+}
+
 function renderBoardTokens(state) {
-  document.querySelectorAll('.tile-tokens').forEach(el => el.innerHTML = '');
-  (state.players || []).forEach((p, i) => {
-    const container = document.getElementById('tokens-' + p.pos);
-    if (!container) return;
-    const moved = prevPlayerPositions.has(p.id) && prevPlayerPositions.get(p.id) !== p.pos;
-    const token = document.createElement('div');
-    token.className        = 'token' +
-      (p.disconnected ? ' token-disconnected' : '') +
-      (moved          ? ' token-jump'         : '');
-    token.style.background = p.disconnected ? '#555' : PLAYER_COLORS[i % 8];
-    token.title            = getPlayerName(p.id, state) + (p.disconnected ? ' (disconnected)' : '');
-    if (moved) token.addEventListener('animationend', () => token.classList.remove('token-jump'), { once: true });
+  const players = state.players || [];
+  let movingCount = 0;
+
+  players.forEach((p, i) => {
+    const prevPos = prevPlayerPositions.get(p.id);
+    const moved   = prevPos !== undefined && prevPos !== p.pos;
+
+    if (!moved) {
+      // Just place — no animation needed
+      placeToken(p.id, p.pos, i, p.disconnected);
+      // Update title with real name
+      const el = document.querySelector(`.token[data-pid="${CSS.escape(p.id)}"]`);
+      if (el) el.title = getPlayerName(p.id, state) + (p.disconnected ? ' (disconnected)' : '');
+    } else {
+      // Step-by-step animation
+      movingCount++;
+      isAnimating = true;
+      animateTokenSteps(p.id, prevPos, p.pos, i, p.disconnected, () => {
+        // Update title after landing
+        const el = document.querySelector(`.token[data-pid="${CSS.escape(p.id)}"]`);
+        if (el) el.title = getPlayerName(p.id, state) + (p.disconnected ? ' (disconnected)' : '');
+
+        movingCount--;
+        if (movingCount === 0) {
+          isAnimating = false;
+          flushModalQueue();
+        }
+      });
+    }
+
     prevPlayerPositions.set(p.id, p.pos);
-    container.appendChild(token);
+  });
+
+  // Remove tokens for players no longer in the game
+  document.querySelectorAll('.token[data-pid]').forEach(el => {
+    const pid = el.dataset.pid;
+    if (!players.find(p => p.id === pid)) {
+      el.nextElementSibling?.classList.contains('token-shadow') && el.nextElementSibling.remove();
+      el.remove();
+    }
   });
 }
 
@@ -914,7 +1025,7 @@ function showBuyPopup(prop, player) {
   document.getElementById('buy-prop-rent').textContent        = '₹ ' + prop.baseRent;
   document.getElementById('buy-prop-group').textContent       = (prop.colorGroup || '').replace('_',' ');
   document.getElementById('buy-confirm-price').textContent    = prop.price;
-  openModal('modal-buy');
+  queueModal(() => openModal('modal-buy'));
 }
 
 function confirmBuy() {
@@ -1107,7 +1218,7 @@ function checkIncomingTrades(state) {
   `;
 
   if (!document.getElementById('modal-trade-incoming').classList.contains('open')) {
-    openModal('modal-trade-incoming');
+    queueModal(() => openModal('modal-trade-incoming'));
   }
 }
 
