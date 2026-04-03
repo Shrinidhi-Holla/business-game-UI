@@ -74,6 +74,7 @@ let gameState      = null;
 let pendingTradeId = null;
 
 // ── AUTO-SKIP TIMER STATE ─────────────────────────────────────────────────
+const MAX_AUTO_SKIPS   = 3;    // consecutive missed turns before kick
 let skipTimerInterval  = null;
 let skipTimerCountdown = 0;
 let skipAlreadySent    = false;
@@ -83,8 +84,9 @@ let skipTargetPlayerId = null;
 let lastShownPhaseEvent = null;
 let lastEventText       = null;
 
-// ── PAWN JUMP: track previous positions to detect movement ────────────────
-const prevPlayerPositions = new Map();   // playerId → last known pos
+// ── PAWN ANIMATION & KICK TRACKING ────────────────────────────────────────
+const prevPlayerPositions = new Map();  // playerId → last board pos
+const autoSkipCounts      = new Map();  // playerId → consecutive auto-skips seen
 
 // ── SCREEN ROUTING ────────────────────────────────────────────────────────
 function showScreen(id) {
@@ -123,7 +125,7 @@ function connectWS(onConnected) {
 function subscribe(gameId) {
   stompClient.subscribe(`${TOPIC}/${gameId}`, msg => {
     const state = JSON.parse(msg.body);
-    handleStateUpdate(state);
+    (window.handleStateUpdate || handleStateUpdate)(state);
   });
 }
 
@@ -137,8 +139,16 @@ function send(dest, headers, body) {
   const savedToken   = localStorage.getItem('reconnectToken');
   const savedPlayer  = localStorage.getItem('reconnectPlayerId');
   const savedName    = localStorage.getItem('reconnectPlayerName');
+  const savedSkips   = parseInt(localStorage.getItem('reconnectSkipCount') || '0', 10);
 
   if (!savedGameId || !savedToken || !savedPlayer) return;
+
+  // If this player already exhausted their auto-skips, don't attempt reconnect
+  if (savedSkips >= MAX_AUTO_SKIPS) {
+    clearReconnectStorage();
+    showToast('You were removed from the game after too many missed turns.');
+    return;
+  }
 
   myPlayerId    = savedPlayer;
   myPlayerName  = savedName || savedPlayer;
@@ -146,6 +156,7 @@ function send(dest, headers, body) {
 
   connectWS(() => {
     subscribe(savedGameId);
+    // Send reconnect — backend will reject if player was kicked
     send('/join', {
       gameId:         savedGameId,
       playerId:       savedPlayer,
@@ -166,7 +177,15 @@ function storeReconnectToken(state) {
     localStorage.setItem('reconnectPlayerId',   myPlayerId);
     localStorage.setItem('reconnectPlayerName', myPlayerName);
     localStorage.setItem('reconnectToken',      me.reconnectToken);
+    // Persist current skip count so the gate survives page reload
+    const skips = autoSkipCounts.get(myPlayerId) || 0;
+    localStorage.setItem('reconnectSkipCount',  String(skips));
   }
+}
+
+function clearReconnectStorage() {
+  ['reconnectGameId','reconnectPlayerId','reconnectPlayerName',
+   'reconnectToken','reconnectSkipCount'].forEach(k => localStorage.removeItem(k));
 }
 
 // ── DISCONNECT ON UNLOAD / VISIBILITY CHANGE ──────────────────────────────
@@ -273,11 +292,39 @@ function joinGame() {
   currentGameId = gameId;
 
   connectWS(() => {
-    subscribe(gameId);
-    send('/join', { gameId, playerId: myPlayerId });
-    showScreen('lobby');
-    document.getElementById('lobby-game-id').textContent = gameId;
-    document.getElementById('topbar-room').textContent   = 'Room: ' + gameId;
+    // One-shot peek: check if game is in-progress before fully joining
+    let peekSub;
+    peekSub = stompClient.subscribe(`${TOPIC}/${gameId}`, msg => {
+      const state = JSON.parse(msg.body);
+      peekSub.unsubscribe();
+
+      if (state.started === true) {
+        // Only allow entry if this browser has a valid reconnect token for this game
+        const savedGameId = localStorage.getItem('reconnectGameId');
+        const savedToken  = localStorage.getItem('reconnectToken');
+        const savedPlayer = localStorage.getItem('reconnectPlayerId');
+        const savedSkips  = parseInt(localStorage.getItem('reconnectSkipCount') || '0', 10);
+
+        if (!savedToken || savedGameId !== gameId || savedSkips >= MAX_AUTO_SKIPS) {
+          showToast('🚫 Game in progress — unable to join.');
+          stompClient.disconnect();
+          return;
+        }
+        // Restore original identity for reconnect
+        myPlayerId   = savedPlayer;
+        myPlayerName = localStorage.getItem('reconnectPlayerName') || savedPlayer;
+      }
+
+      subscribe(gameId);
+      const token = localStorage.getItem('reconnectToken');
+      send('/join', { gameId, playerId: myPlayerId,
+        ...(token ? { reconnectToken: token } : {}) });
+      showScreen('lobby');
+      document.getElementById('lobby-game-id').textContent = gameId;
+      document.getElementById('topbar-room').textContent   = 'Room: ' + gameId;
+    });
+
+    send('/create', {}, gameId);
   });
 }
 
@@ -292,9 +339,28 @@ function startGame() {
 
 // ── STATE HANDLER ─────────────────────────────────────────────────────────
 function handleStateUpdate(state) {
+
+  // Backend rejected reconnect: player was kicked from this game
+  if (state.error === 'KICKED') {
+    clearReconnectStorage();
+    const msg = document.getElementById('kicked-msg');
+    if (msg) msg.textContent = 'You were removed from that game after too many missed turns.';
+    openModal('modal-kicked');
+    return;
+  }
+
+  // Fresh joiner trying to enter an in-progress game they're not part of
+  if (state.started && myPlayerId && state.players &&
+      !state.players.find(p => p.id === myPlayerId)) {
+    showScreen('landing');
+    showToast('🚫 Game in progress — unable to join.');
+    if (stompClient?.connected) stompClient.disconnect();
+    return;
+  }
+
   gameState = state;
 
-  // Persist reconnect token after first join
+  // Persist reconnect token
   if (state.players) storeReconnectToken(state);
 
   if (!state.started) {
@@ -302,6 +368,7 @@ function handleStateUpdate(state) {
     return;
   }
 
+  // Transition from lobby → game screen
   if (document.getElementById('lobby').classList.contains('active') ||
       !document.getElementById('game-screen').classList.contains('active')) {
     showScreen('game-screen');
@@ -310,6 +377,16 @@ function handleStateUpdate(state) {
 
   renderGame(state);
   manageAutoSkipTimer(state);
+
+  // Mid-game kick: backend marked this player as kicked
+  const me = state.players?.find(p => p.id === myPlayerId);
+  if (me?.kicked) {
+    clearReconnectStorage();
+    const msg = document.getElementById('kicked-msg');
+    if (msg) msg.textContent = `You were removed after ${MAX_AUTO_SKIPS} consecutive missed turns.`;
+    setTimeout(() => openModal('modal-kicked'), 800);
+    return;
+  }
 
   if (state.finished) {
     document.getElementById('win-player-name').textContent =
@@ -346,6 +423,32 @@ function renderLobby(state) {
     msg.textContent        = `Waiting for players… (${(state.players||[]).length}/2 minimum)`;
     startBtn.style.display = 'none';
   }
+}
+
+// ── RENT SCHEDULE HELPERS ─────────────────────────────────────────────────
+// Generates a 6-tier [base, 1H, 2H, 3H, 4H, hotel] array from tile price.
+// Prefers server data; falls back to standard Monopoly-style multipliers.
+function computeRentSchedule(tile, prop) {
+  if (prop?.rentSchedule?.length >= 6) return prop.rentSchedule;
+  if (prop?.rents?.length        >= 6) return prop.rents;
+  if (prop?.rentLevels?.length   >= 6) return prop.rentLevels;
+  const price = tile?.price || 0;
+  const base  = prop?.baseRent ?? Math.round(price * 0.06);
+  return [
+    base,
+    Math.round(base * 5),
+    Math.round(base * 15),
+    Math.round(base * 45),
+    Math.round(base * 63),
+    Math.round(base * 88),
+  ];
+}
+
+function getHousePrice(tile, prop) {
+  if (prop?.housePrice)    return prop.housePrice;
+  if (prop?.houseCost)     return prop.houseCost;
+  if (prop?.buildingPrice) return prop.buildingPrice;
+  return Math.round(((tile?.price || 0) * 0.5) / 50) * 50;
 }
 
 // ── BOARD BUILD (once) ────────────────────────────────────────────────────
@@ -495,7 +598,53 @@ function updateEventLog(state) {
   if (!state.lastEvent || state.lastEvent === lastEventText) return;
   lastEventText = state.lastEvent;
 
-  addLog(`<span class="log-warn">📢 ${state.lastEvent}</span>`);
+  // Enrich the log entry with colour coding
+  const text = state.lastEvent;
+  let html = `<span class="log-warn">📢 ${text}</span>`;
+
+  // Rent paid: "X paid rent ₹N to Y"  — colour money & players
+  const rentMatch = text.match(/(.+?) paid rent (?:₹|Rs\.?|INR\s*)?([\d,]+) to (.+)/i);
+  if (rentMatch) {
+    html = `<span class="log-player">${rentMatch[1]}</span> <span class="log-action">paid rent</span> `
+         + `<span class="log-money">₹${rentMatch[2]}</span> `
+         + `<span class="log-action">to</span> <span class="log-player">${rentMatch[3]}</span>`;
+  }
+
+  // Tax paid: "X paid tax ₹N"
+  const taxMatch = text.match(/(.+?) paid (?:income )?tax (?:₹|Rs\.?|INR\s*)?([\d,]+)/i);
+  if (taxMatch) {
+    html = `<span class="log-player">${taxMatch[1]}</span> <span class="log-action">paid tax</span> `
+         + `<span class="log-money">₹${taxMatch[2]}</span>`;
+  }
+
+  // Bought property: "X bought Y for ₹N"
+  const buyMatch = text.match(/(.+?) bought (.+?) for (?:₹|Rs\.?|INR\s*)?([\d,]+)/i);
+  if (buyMatch) {
+    html = `<span class="log-player">${buyMatch[1]}</span> <span class="log-action">bought</span> `
+         + `<span class="log-prop">${buyMatch[2]}</span> for <span class="log-money">₹${buyMatch[3]}</span>`;
+  }
+
+  // Built house: "X built house on Y"
+  const buildMatch = text.match(/(.+?) built (?:a )?house on (.+)/i);
+  if (buildMatch) {
+    html = `<span class="log-player">${buildMatch[1]}</span> <span class="log-action">🏠 built house on</span> `
+         + `<span class="log-prop">${buildMatch[2]}</span>`;
+  }
+
+  // Built hotel: "X built hotel on Y"
+  const hotelMatch = text.match(/(.+?) built (?:a )?hotel on (.+)/i);
+  if (hotelMatch) {
+    html = `<span class="log-player">${hotelMatch[1]}</span> <span class="log-action">🏨 built hotel on</span> `
+         + `<span class="log-prop">${hotelMatch[2]}</span>`;
+  }
+
+  // Chance card: "X drew: …"
+  const chanceMatch = text.match(/(.+?) drew: (.+)/i);
+  if (chanceMatch) {
+    html = `<span class="log-player">${chanceMatch[1]}</span> <span class="log-action">🎴 drew:</span> ${chanceMatch[2]}`;
+  }
+
+  addLog(html);
 
   // Show inside modal for CHANCE / TAX instead of toast
   if (state.phase === 'CHANCE' || state.phase === 'TAX') {
@@ -507,6 +656,7 @@ function updateEventLog(state) {
 }
 
 // ── AUTO-SKIP TIMER ────────────────────────────────────────────────────────
+
 function manageAutoSkipTimer(state) {
   const cur = currentPlayer(state);
   if (!cur) { clearSkipTimer(); return; }
@@ -518,7 +668,36 @@ function manageAutoSkipTimer(state) {
       startSkipTimer(cur.id, 60);
     }
   } else {
+    // Player is active — reset their skip counter
+    if (cur.id) autoSkipCounts.set(cur.id, 0);
     clearSkipTimer();
+  }
+}
+
+// Called each time the backend confirms a skip happened (detected via log/event)
+function recordAutoSkip(playerId) {
+  const count = (autoSkipCounts.get(playerId) || 0) + 1;
+  autoSkipCounts.set(playerId, count);
+
+  if (count >= MAX_AUTO_SKIPS && gameState) {
+    const activePlayers = (gameState.players || []).filter(p => !p.bankrupt && !p.kicked);
+    // If this player is the only disconnected one and only 1 active remains after kick, handle win
+    const remainingAfterKick = activePlayers.filter(p => p.id !== playerId);
+    if (remainingAfterKick.length === 1) {
+      // Announce winner, return to lobby after 30s
+      const winner = remainingAfterKick[0];
+      addLog(`<span class="log-warn">🏆 ${getPlayerName(winner.id, gameState)} wins — last player standing!</span>`);
+      document.getElementById('win-player-name').textContent = getPlayerName(winner.id, gameState);
+      openModal('modal-win');
+      setTimeout(() => {
+        clearReconnectStorage();
+        location.reload();
+      }, 30000);
+    } else {
+      // Just kick them — send a kick message to backend
+      send('/kickPlayer', { gameId: currentGameId, targetPlayerId: playerId });
+      addLog(`<span class="log-warn">🚫 ${getPlayerName(playerId, gameState)} was removed after ${MAX_AUTO_SKIPS} missed turns</span>`);
+    }
   }
 }
 
@@ -536,7 +715,8 @@ function startSkipTimer(targetId, seconds) {
       if (!skipAlreadySent) {
         skipAlreadySent = true;
         send('/skipTurn', { gameId: currentGameId, targetPlayerId: targetId });
-        addLog(`<span class="log-warn">⏭ Auto-skipped disconnected player's turn</span>`);
+        addLog(`<span class="log-warn">⏭ Auto-skipped ${getPlayerName(targetId, gameState || {})}'s turn</span>`);
+        recordAutoSkip(targetId);
       }
     }
   }, 1000);
@@ -636,15 +816,14 @@ function renderBoardTokens(state) {
   (state.players || []).forEach((p, i) => {
     const container = document.getElementById('tokens-' + p.pos);
     if (!container) return;
-    const token = document.createElement('div');
     const moved = prevPlayerPositions.has(p.id) && prevPlayerPositions.get(p.id) !== p.pos;
-    token.className        = 'token' + (p.disconnected ? ' token-disconnected' : '') + (moved ? ' token-jump' : '');
+    const token = document.createElement('div');
+    token.className        = 'token' +
+      (p.disconnected ? ' token-disconnected' : '') +
+      (moved          ? ' token-jump'         : '');
     token.style.background = p.disconnected ? '#555' : PLAYER_COLORS[i % 8];
     token.title            = getPlayerName(p.id, state) + (p.disconnected ? ' (disconnected)' : '');
-    // Remove the class after the animation ends so it can re-trigger next move
-    if (moved) {
-      token.addEventListener('animationend', () => token.classList.remove('token-jump'), { once: true });
-    }
+    if (moved) token.addEventListener('animationend', () => token.classList.remove('token-jump'), { once: true });
     prevPlayerPositions.set(p.id, p.pos);
     container.appendChild(token);
   });
@@ -754,8 +933,12 @@ function doRoll() {
 }
 
 function doBuy() {
+  const me   = myPlayer(gameState);
+  const prop = gameState?.props?.[me?.pos];
+  const name = getTileName(me?.pos || 0);
+  const price = prop?.price ? ` for ₹${prop.price}` : '';
   send('/buy', { gameId: currentGameId, playerId: myPlayerId });
-  addLog(`<span class="log-player">${myPlayerName}</span> <span class="log-action">bought</span> <span class="log-prop">${getTileName(myPlayer(gameState)?.pos || 0)}</span>`);
+  addLog(`<span class="log-player">${myPlayerName}</span> <span class="log-action">bought</span> <span class="log-prop">${name}</span><span class="log-money">${price}</span>`);
 }
 
 function doEnd() {
@@ -993,11 +1176,178 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
     if (e.target === overlay) {
       const id = overlay.id;
-      // Win modal and event modal cannot be dismissed by clicking overlay
       if (id !== 'modal-win' && id !== 'modal-event') closeModal(id);
     }
   });
 });
+
+// ── LEAVE GAME ─────────────────────────────────────────────────────────────
+function confirmLeave() { openModal('modal-leave-confirm'); }
+
+function doLeave() {
+  closeModal('modal-leave-confirm');
+  if (stompClient && stompClient.connected && currentGameId && myPlayerId) {
+    send('/leave', { gameId: currentGameId, playerId: myPlayerId });
+  }
+  clearReconnectStorage();
+  showToast('You left the game.');
+  setTimeout(() => location.reload(), 1200);
+}
+
+// ── TILE DETAIL CLICK ──────────────────────────────────────────────────────
+function openTileDetail(pos) {
+  const tile  = BOARD_TILES.find(t => t.pos === pos);
+  if (!tile) return;
+  const prop  = gameState?.props?.[pos];
+  const color = prop?.colorGroup ? COLOR_MAP[prop.colorGroup]
+              : tile.color       ? COLOR_MAP[tile.color]
+              : null;
+
+  document.getElementById('td-icon').textContent  = tile.icon || '';
+  document.getElementById('td-title').textContent = tile.name || tile.label || 'Tile';
+
+  const header = document.querySelector('#modal-tile-detail .modal-header');
+  header.style.background = color
+    ? `linear-gradient(135deg, ${color}dd, ${color}88)`
+    : 'linear-gradient(135deg, #1a237e, #0d47a1)';
+
+  const body = document.getElementById('td-body');
+  body.innerHTML = '';
+
+  // Color bar
+  if (color) {
+    const bar = document.createElement('div');
+    bar.className = 'td-color-bar';
+    bar.style.background = color;
+    body.appendChild(bar);
+  }
+
+  // Ownership
+  const ownerSection = document.createElement('div');
+  ownerSection.innerHTML = '<div class="td-section-title">Ownership</div>';
+  if (prop?.owner) {
+    const ownerIdx   = (gameState?.players || []).findIndex(p => p.id === prop.owner);
+    const ownerColor = ownerIdx >= 0 ? PLAYER_COLORS[ownerIdx % 8] : '#888';
+    const ownerName  = getPlayerName(prop.owner, gameState);
+    const mortTag    = prop.mortgaged
+      ? ' <span style="color:#ef5350;font-size:11px">(mortgaged)</span>' : '';
+    ownerSection.innerHTML += `<div class="td-owner-badge" style="background:${ownerColor}">👤 ${ownerName}${mortTag}</div>`;
+  } else if (tile.type === 'prop' || tile.type === 'railroad' || tile.type === 'utility') {
+    ownerSection.innerHTML += `<div class="td-unowned">🏷️ Unowned — costs <strong>₹${tile.price}</strong></div>`;
+  } else {
+    ownerSection.innerHTML += `<div class="td-unowned">Not purchasable</div>`;
+  }
+  body.appendChild(ownerSection);
+
+  // Property rent schedule
+  if (tile.type === 'prop') {
+    const rents         = computeRentSchedule(tile, prop);
+    const currentHouses = prop?.houses || 0;
+    const housePrice    = getHousePrice(tile, prop);
+    const rows = [
+      ['Base rent',              rents[0]],
+      ['1 house 🏠',             rents[1]],
+      ['2 houses 🏠🏠',          rents[2]],
+      ['3 houses 🏠🏠🏠',        rents[3]],
+      ['4 houses',               rents[4]],
+      ['Hotel 🏨',               rents[5]],
+    ];
+    let tbl = '<div class="td-section-title">Rent Schedule</div><table class="td-rent-table">';
+    rows.forEach(([label, val], i) => {
+      const active = (i === 0 && currentHouses === 0) ||
+                     (i >= 1 && i <= 4 && currentHouses === i) ||
+                     (i === 5 && currentHouses === 5);
+      tbl += `<tr${active ? ' class="td-highlight"' : ''}><td>${label}</td><td>₹${val ?? '—'}</td></tr>`;
+    });
+    tbl += `</table>
+      <div class="td-section-title">Build Cost</div>
+      <div style="font-size:13px;color:#555;padding:3px 0">
+        🏠 House: <strong>₹${housePrice}</strong> &nbsp;·&nbsp;
+        🏨 Hotel: <strong>₹${housePrice}</strong>
+        <span style="color:#aaa;font-size:11px"> (after 4 houses)</span>
+      </div>`;
+    const rs = document.createElement('div');
+    rs.innerHTML = tbl;
+    body.appendChild(rs);
+  }
+
+  // Railroad rent
+  if (tile.type === 'railroad') {
+    const ownerId = prop?.owner;
+    let rrCount = 0;
+    if (ownerId && gameState?.props) {
+      rrCount = Object.values(gameState.props)
+        .filter(p => p.colorGroup === 'RAILROAD' && p.owner === ownerId).length;
+    }
+    const rrRents = [0, 25, 50, 100, 200];
+    let rows = '';
+    [1,2,3,4].forEach(n => {
+      const active = ownerId && rrCount === n;
+      rows += `<tr${active ? ' class="td-highlight"' : ''}>
+        <td>${n} railroad${n > 1 ? 's' : ''} owned</td><td>₹${rrRents[n]}</td></tr>`;
+    });
+    const rr = document.createElement('div');
+    rr.innerHTML = `<div class="td-section-title">Railroad Rent</div>
+      <table class="td-rent-table">${rows}</table>`;
+    body.appendChild(rr);
+  }
+
+  // Utility rent
+  if (tile.type === 'utility') {
+    const ownerId = prop?.owner;
+    let utCount = 0;
+    if (ownerId && gameState?.props) {
+      utCount = Object.values(gameState.props)
+        .filter(p => p.colorGroup === 'UTILITY' && p.owner === ownerId).length;
+    }
+    const ut = document.createElement('div');
+    ut.innerHTML = `<div class="td-section-title">Utility Rent</div>
+      <table class="td-rent-table">
+        <tr${utCount === 1 ? ' class="td-highlight"' : ''}><td>1 utility owned</td><td>4× dice roll</td></tr>
+        <tr${utCount === 2 ? ' class="td-highlight"' : ''}><td>Both utilities owned</td><td>10× dice roll</td></tr>
+      </table>`;
+    body.appendChild(ut);
+  }
+
+  // Tax
+  if (tile.type === 'tax') {
+    const tx = document.createElement('div');
+    tx.innerHTML = `<div class="td-section-title">Tax Amount</div>
+      <div style="font-size:22px;font-weight:800;color:var(--saffron);margin-top:6px">₹${tile.value}</div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Paid directly to the bank</div>`;
+    body.appendChild(tx);
+  }
+
+  // Corner / Chest / Chance descriptions
+  if (tile.type === 'corner' || tile.type === 'chest' || tile.type === 'chance') {
+    const descriptions = {
+      go:       'Collect ₹200 every time you pass or land here.',
+      jail:     'Just visiting — or waiting. Roll doubles to escape, or pay ₹50 bail.',
+      park:     'Free Parking — nothing happens. Enjoy the break!',
+      gotojail: 'Go directly to Jail. Do not pass GO. Do not collect ₹200.',
+      chest:    'Draw a Community Chest card — a surprise awaits!',
+      chance:   'Draw a Chance card — fortunes can change instantly!',
+    };
+    const key = tile.corner || tile.type;
+    const info = document.createElement('div');
+    info.innerHTML = `<div class="td-section-title">About this space</div>
+      <div style="font-size:13px;color:#555;line-height:1.7;padding:4px 0">
+        ${descriptions[key] || tile.label || ''}
+      </div>`;
+    body.appendChild(info);
+  }
+
+  openModal('modal-tile-detail');
+}
+// Attach tile click listeners after board is built
+const _origBuildBoard = buildBoard;
+window.buildBoard = function() {
+  _origBuildBoard();
+  document.querySelectorAll('.tile').forEach(el => {
+    const pos = parseInt(el.id.replace('tile-', ''), 10);
+    if (!isNaN(pos)) el.addEventListener('click', () => openTileDetail(pos));
+  });
+};
 
 // ── TOAST ──────────────────────────────────────────────────────────────────
 let toastTimer = null;

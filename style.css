@@ -352,6 +352,20 @@ html, body {
   color: rgba(255,255,255,0.5);
   font-size: 13px;
 }
+.btn-leave {
+  background: linear-gradient(135deg, #880E4F, #c62828);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: filter .15s, transform .1s;
+}
+.btn-leave:hover { filter: brightness(1.15); transform: translateY(-1px); }
 
 .game-layout {
   flex: 1;
@@ -492,12 +506,12 @@ html, body {
   border: 1px solid rgba(255,255,255,0.15);
   position: relative;
   display: flex; flex-direction: column;
-  cursor: default;
+  cursor: pointer;
   overflow: hidden;
-  transition: filter .15s;
+  transition: filter .15s, transform .15s;
   background: #fff;
 }
-.tile:hover { filter: brightness(1.1); z-index: 5; }
+.tile:hover { filter: brightness(1.12); z-index: 5; transform: scale(1.04); }
 
 /* Color bar */
 .tile-color-bar {
@@ -575,18 +589,13 @@ html, body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.5);
   flex-shrink: 0;
 }
-
-/* Pawn jump animation — triggered when a token lands on a new tile */
 @keyframes tokenJump {
-  0%   { transform: translateY(0)    scale(1);    box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
-  25%  { transform: translateY(-8px) scale(1.15); box-shadow: 0 8px 12px rgba(0,0,0,0.35); }
-  55%  { transform: translateY(-4px) scale(1.1);  box-shadow: 0 5px 8px rgba(0,0,0,0.3); }
-  75%  { transform: translateY(-2px) scale(1.05); box-shadow: 0 3px 5px rgba(0,0,0,0.25); }
-  100% { transform: translateY(0)    scale(1);    box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  0%   { transform: translateY(0)    scale(1); }
+  30%  { transform: translateY(-9px) scale(1.2); }
+  60%  { transform: translateY(-3px) scale(1.05); }
+  100% { transform: translateY(0)    scale(1); }
 }
-.token.token-jump {
-  animation: tokenJump 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
+.token.token-jump { animation: tokenJump 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards; }
 
 /* House/hotel icons on tile */
 .tile-buildings {
@@ -875,6 +884,28 @@ html, body {
   pointer-events: none;
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ═══════════════════════ TILE DETAIL MODAL ═════════════════════════════ */
+.modal-tile-detail-header {
+  background: linear-gradient(135deg, #1a237e, #0d47a1);
+  display: flex; align-items: center; gap: 10px;
+}
+.td-color-bar { height: 14px; margin: -16px -20px 12px; }
+.td-section-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  color: #999; text-transform: uppercase; margin: 12px 0 4px;
+}
+.td-rent-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.td-rent-table tr td { padding: 4px 8px; border-bottom: 1px solid #eee; color: #333; }
+.td-rent-table tr td:last-child { text-align: right; font-weight: 700; color: var(--saffron); }
+.td-rent-table tr.td-highlight td { background: #fff8e1; }
+.td-owner-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 700;
+  color: white; margin-top: 4px;
+}
+.td-unowned { color: #888; font-size: 13px; margin-top: 4px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
 
 /* ═══════════════════════ RESPONSIVE ════════════════════════════════════ */
 @media (max-width: 900px) {
