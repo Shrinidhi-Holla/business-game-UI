@@ -128,11 +128,14 @@
 
       <!-- Action buttons -->
       <div class="action-btns" id="action-btns">
-        <button class="btn-action btn-roll"  id="btn-roll"  onclick="doRoll()"    disabled>🎲 ROLL</button>
-        <button class="btn-action btn-buy"   id="btn-buy"   onclick="doBuy()"     disabled>🏠 BUY</button>
-        <button class="btn-action btn-build" id="btn-build" onclick="openBuild()" disabled>🏗 BUILD</button>
-        <button class="btn-action btn-trade" id="btn-trade" onclick="openTrade()" disabled>🤝 TRADE</button>
-        <button class="btn-action btn-end"   id="btn-end"   onclick="doEnd()"     disabled>✅ END TURN</button>
+        <button class="btn-action btn-roll"     id="btn-roll"     onclick="doRoll()"       disabled>🎲 ROLL</button>
+        <button class="btn-action btn-buy"      id="btn-buy"      onclick="doBuy()"        disabled>🏠 BUY</button>
+        <div class="build-mortgage-row">
+          <button class="btn-action btn-build"    id="btn-build"    onclick="openBuild()"    disabled>🏗 BUILD</button>
+          <button class="btn-action btn-mortgage-quick" id="btn-mortgage-quick" onclick="openMortgage()" disabled>🏦 MORTGAGE</button>
+        </div>
+        <button class="btn-action btn-trade"     id="btn-trade"    onclick="openTrade()"    disabled>🤝 TRADE</button>
+        <button class="btn-action btn-end"       id="btn-end"      onclick="doEnd()"        disabled>✅ END TURN</button>
       </div>
 
       <!-- Log lives in the sidebar — game-log id kept for JS compatibility -->
@@ -226,6 +229,19 @@
     <div class="modal-footer">
       <button class="btn-modal btn-confirm" onclick="respondTrade('accept')">✅ ACCEPT</button>
       <button class="btn-modal btn-cancel"  onclick="respondTrade('reject')">❌ REJECT</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mortgage / Unmortgage quick popup -->
+<div class="modal-overlay" id="modal-mortgage">
+  <div class="modal-card modal-wide">
+    <div class="modal-header">🏦 MORTGAGE / UNMORTGAGE</div>
+    <div class="modal-body">
+      <div class="build-list" id="mortgage-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal btn-cancel" onclick="closeModal('modal-mortgage')">CLOSE</button>
     </div>
   </div>
 </div>

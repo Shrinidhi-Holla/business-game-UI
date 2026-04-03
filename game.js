@@ -1018,13 +1018,14 @@ function renderBoardBuildings(state) {
 
 // ── ACTION BUTTONS ─────────────────────────────────────────────────────────
 function updateActionButtons(state, isMyTurn, phase) {
-  const btnRoll  = document.getElementById('btn-roll');
-  const btnBuy   = document.getElementById('btn-buy');
-  const btnBuild = document.getElementById('btn-build');
-  const btnTrade = document.getElementById('btn-trade');
-  const btnEnd   = document.getElementById('btn-end');
+  const btnRoll     = document.getElementById('btn-roll');
+  const btnBuy      = document.getElementById('btn-buy');
+  const btnBuild    = document.getElementById('btn-build');
+  const btnMortgage = document.getElementById('btn-mortgage-quick');
+  const btnTrade    = document.getElementById('btn-trade');
+  const btnEnd      = document.getElementById('btn-end');
 
-  [btnRoll, btnBuy, btnBuild, btnTrade, btnEnd].forEach(b => b.disabled = true);
+  [btnRoll, btnBuy, btnBuild, btnMortgage, btnTrade, btnEnd].forEach(b => { if(b) b.disabled = true; });
 
   if (!isMyTurn || state.finished) return;
 
@@ -1042,9 +1043,10 @@ function updateActionButtons(state, isMyTurn, phase) {
         showBuyPopup(prop, me);
       }
     }
-    btnBuild.disabled = false;
-    btnTrade.disabled = false;
-    btnEnd.disabled   = false;
+    btnBuild.disabled    = false;
+    if (btnMortgage) btnMortgage.disabled = false;
+    btnTrade.disabled    = false;
+    btnEnd.disabled      = false;
     return;
   }
 
@@ -1052,6 +1054,7 @@ function updateActionButtons(state, isMyTurn, phase) {
   // END: just the end button
   if (phase === 'END') {
     btnEnd.disabled = false;
+    if (btnMortgage) btnMortgage.disabled = false;
   }
 }
 
@@ -1114,37 +1117,32 @@ function openBuild() {
   const buildList = document.getElementById('build-list');
   buildList.innerHTML = '';
 
-  // All owned props — houses only on colour groups, mortgage on everything
+  // Only developable (colour group) properties for building houses
   const myProps = (me.props || []).map(pos => gameState.props?.[pos]).filter(Boolean);
+  const developable = myProps.filter(p => p.colorGroup !== 'RAILROAD' && p.colorGroup !== 'UTILITY');
 
-  if (myProps.length === 0) {
-    buildList.innerHTML = '<div style="color:#888;padding:10px">No properties owned</div>';
+  if (developable.length === 0) {
+    buildList.innerHTML = '<div style="color:#888;padding:10px">No colour-group properties to build on</div>';
     openModal('modal-build');
     return;
   }
 
-  // Section header
   buildList.innerHTML = `
     <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#aaa;
                 text-transform:uppercase;padding:2px 4px 6px">
-      BUILD &amp; MORTGAGE
+      BUILD HOUSES / HOTELS
     </div>`;
 
-  myProps.forEach(prop => {
+  developable.forEach(prop => {
     const tile         = BOARD_TILES.find(t => t.pos === prop.pos);
     const color        = COLOR_MAP[prop.colorGroup] || '#ccc';
-    const isDevelopable = prop.colorGroup !== 'RAILROAD' && prop.colorGroup !== 'UTILITY';
-    const hasMonopoly  = isDevelopable && ownsFullGroup(me, prop.colorGroup);
-    const mortgageValue = Math.round((prop.price || 0) / 2);
-    const unmortgageCost = Math.round(mortgageValue * 1.1); // 10% interest
+    const hasMonopoly  = ownsFullGroup(me, prop.colorGroup);
 
-    const housesLabel = !isDevelopable
-      ? (prop.colorGroup === 'RAILROAD' ? '🚂 Railroad' : '⚡ Utility')
-      : prop.houses === 5
-        ? '🏨 Hotel'
-        : prop.houses > 0
-          ? `${'🏠'.repeat(prop.houses)} ${prop.houses} house${prop.houses !== 1 ? 's' : ''}`
-          : '0 houses';
+    const housesLabel = prop.houses === 5
+      ? '🏨 Hotel'
+      : prop.houses > 0
+        ? `${'🏠'.repeat(prop.houses)} ${prop.houses} house${prop.houses !== 1 ? 's' : ''}`
+        : '0 houses';
 
     const mortgagedBadge = prop.mortgaged
       ? '<span class="build-mortgaged-badge">MORTGAGED</span>' : '';
@@ -1155,17 +1153,71 @@ function openBuild() {
       <div class="build-prop-color" style="background:${prop.mortgaged ? '#888' : color}"></div>
       <div class="build-prop-info">
         <div class="build-prop-name">${tile?.name || 'Property'} ${mortgagedBadge}</div>
-        <div class="build-prop-houses">${housesLabel}${isDevelopable && prop.housePrice ? ' · ₹' + prop.housePrice + '/house' : ''}</div>
+        <div class="build-prop-houses">${housesLabel}${prop.housePrice ? ' · ₹' + prop.housePrice + '/house' : ''}</div>
       </div>
       <div class="build-btns">
-        ${isDevelopable ? `
         <button class="btn-build-action btn-house-plus"
           ${prop.mortgaged || !hasMonopoly || prop.houses >= 5 || me.money < (prop.housePrice||0) ? 'disabled' : ''}
           title="Build house">+🏠</button>
         <button class="btn-build-action btn-house-minus"
           ${prop.mortgaged || (prop.houses || 0) === 0 ? 'disabled' : ''}
           title="Sell house">−🏠</button>
-        ` : ''}
+      </div>
+    `;
+
+    const plusBtn  = row.querySelector('.btn-house-plus');
+    const minusBtn = row.querySelector('.btn-house-minus');
+    if (plusBtn)  plusBtn.addEventListener('click',  () => doBuild(prop.pos, 1));
+    if (minusBtn) minusBtn.addEventListener('click', () => doBuild(prop.pos, -1));
+
+    buildList.appendChild(row);
+  });
+
+  openModal('modal-build');
+}
+
+function openMortgage() {
+  if (!gameState) return;
+  const me = myPlayer(gameState);
+  if (!me) return;
+
+  const mortgageList = document.getElementById('mortgage-list');
+  mortgageList.innerHTML = '';
+
+  const myProps = (me.props || []).map(pos => gameState.props?.[pos]).filter(Boolean);
+
+  if (myProps.length === 0) {
+    mortgageList.innerHTML = '<div style="color:#888;padding:10px">No properties owned</div>';
+    openModal('modal-mortgage');
+    return;
+  }
+
+  mortgageList.innerHTML = `
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#aaa;
+                text-transform:uppercase;padding:2px 4px 6px">
+      MORTGAGE / UNMORTGAGE
+    </div>`;
+
+  myProps.forEach(prop => {
+    const tile           = BOARD_TILES.find(t => t.pos === prop.pos);
+    const color          = COLOR_MAP[prop.colorGroup] || '#ccc';
+    const mortgageValue  = Math.round((prop.price || 0) / 2);
+    const unmortgageCost = Math.round(mortgageValue * 1.1);
+
+    const mortgagedBadge = prop.mortgaged
+      ? '<span class="build-mortgaged-badge">MORTGAGED</span>' : '';
+
+    const row = document.createElement('div');
+    row.className = 'build-row' + (prop.mortgaged ? ' build-row-mortgaged' : '');
+    row.innerHTML = `
+      <div class="build-prop-color" style="background:${prop.mortgaged ? '#888' : color}"></div>
+      <div class="build-prop-info">
+        <div class="build-prop-name">${tile?.name || 'Property'} ${mortgagedBadge}</div>
+        <div class="build-prop-houses" style="font-size:11px;color:#aaa">
+          ${prop.mortgaged ? `Unmortgage: ₹${unmortgageCost}` : `Mortgage value: ₹${mortgageValue}`}
+        </div>
+      </div>
+      <div class="build-btns">
         ${!prop.mortgaged ? `
         <button class="btn-build-action btn-mortgage"
           ${(prop.houses || 0) > 0 ? 'disabled' : ''}
@@ -1180,16 +1232,10 @@ function openBuild() {
       </div>
     `;
 
-    // Wire up house buttons separately to avoid inline onclick issues with template
-    const plusBtn  = row.querySelector('.btn-house-plus');
-    const minusBtn = row.querySelector('.btn-house-minus');
-    if (plusBtn)  plusBtn.addEventListener('click',  () => doBuild(prop.pos, 1));
-    if (minusBtn) minusBtn.addEventListener('click', () => doBuild(prop.pos, -1));
-
-    buildList.appendChild(row);
+    mortgageList.appendChild(row);
   });
 
-  openModal('modal-build');
+  openModal('modal-mortgage');
 }
 
 function ownsFullGroup(player, colorGroup) {

@@ -778,6 +778,19 @@ html, body {
 .btn-trade { background: linear-gradient(135deg, #4A148C, #7B1FA2); color: white; }
 .btn-end   { background: linear-gradient(135deg, #880E4F, #AD1457); color: white; }
 
+/* Build + Mortgage side-by-side row */
+.build-mortgage-row {
+  display: flex; gap: 6px;
+}
+.build-mortgage-row .btn-build {
+  flex: 1;
+}
+.btn-mortgage-quick {
+  background: linear-gradient(135deg, #5d4037, #795548);
+  color: #ffe0b2;
+  flex: 1;
+}
+
 .btn-action:not(:disabled):hover { filter: brightness(1.15); transform: translateX(2px); }
 .btn-action:not(:disabled):active { transform: translateX(0); }
 
@@ -1098,28 +1111,99 @@ html, body {
     font-size: 11px; padding: 8px 4px;
     text-align: center;
   }
+  .build-mortgage-row {
+    flex: 2;
+    min-width: 140px;
+  }
 }
 
-/* ── Mobile (≤600px): player cards in board center, ultra-compact controls ── */
+/* ── Mobile (≤600px): no vertical scroll, bigger tiles, fixed trade ── */
 @media (max-width: 600px) {
-  .game-topbar { padding: 6px 10px; }
-  .game-logo   { font-size: 15px; letter-spacing: 1px; }
-  .phase-chip  { font-size: 10px; padding: 3px 8px; }
-  #topbar-room { display: none; }
+  /* Prevent any body scroll — everything fits in viewport */
+  html, body { height: 100%; overflow: hidden; }
 
-  .game-layout {
-    grid-template-rows: 1fr auto;
-    padding: 2px;
+  #game-screen {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
   }
 
-  /* Left panel hidden — player info moves into board center via JS */
+  .game-topbar { padding: 4px 8px; min-height: 0; }
+  .game-logo   { font-size: 14px; letter-spacing: 1px; }
+  .phase-chip  { font-size: 9px; padding: 2px 6px; }
+  #topbar-room { display: none; }
+  .btn-leave   { font-size: 11px; padding: 4px 8px; }
+
+  .game-layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr;
+    /* board fills most space, controls bar is fixed-height */
+    grid-template-rows: 1fr auto;
+    padding: 0;
+    gap: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Left panel hidden — player info in board center */
   .left-panel { display: none; }
 
-  /* Board fills width */
-  .board-wrapper { padding: 2px; }
+  /* Board fills remaining height */
+  .board-wrapper {
+    order: 1;
+    padding: 2px;
+    min-height: 0;
+    overflow: hidden;
+  }
   .board {
-    width: min(99vw, 99vw);
-    height: min(99vw, 99vw);
+    /* Square that fits whichever dimension is smaller after controls bar */
+    width: min(calc(100dvw - 4px), calc(100dvh - 120px));
+    height: min(calc(100dvw - 4px), calc(100dvh - 120px));
+  }
+
+  /* Bigger tile text on mobile */
+  .tile-name  { font-size: clamp(6.5px, 2.5vw, 11px); }
+  .tile-price { font-size: clamp(7px,   2.8vw, 12px); }
+  .tile-icon  { font-size: clamp(10px,  3.5vw, 18px); }
+  .corner-icon  { font-size: clamp(18px, 5vw, 28px); }
+  .corner-label { font-size: clamp(6px,  2vw, 9px); }
+  .tile-color-bar { height: 6px; }
+
+  /* Controls strip — compact fixed bar */
+  .right-panel {
+    order: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    max-height: none;
+    height: auto;
+    overflow: visible;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid #333;
+    background: #161616;
+    padding: 4px 6px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .right-panel .panel-title { display: none; }
+
+  .dice-display { margin: 0; gap: 6px; }
+  .die { width: 30px; height: 30px; font-size: 16px; }
+  .dice-total { font-size: 11px; min-width: 40px; }
+
+  .action-btns {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex: 1;
+    gap: 3px;
+  }
+  .btn-action { font-size: 9px; padding: 5px 2px; min-width: 48px; flex: 1; }
+  .build-mortgage-row {
+    flex: 2;
+    min-width: 96px;
+    gap: 3px;
   }
 
   /* Board center shows compact player cards */
@@ -1131,7 +1215,6 @@ html, body {
   }
   .board-center-title { display: none; }
 
-  /* Compact player mini-cards injected into center */
   .board-center-players {
     width: 100%;
     display: flex;
@@ -1164,17 +1247,29 @@ html, body {
   }
   .mini-money { color: var(--gold); font-size: 9px; }
 
-  /* Controls — even more compact */
-  .right-panel { gap: 4px; padding: 6px; }
-  .die { width: 34px; height: 34px; font-size: 18px; }
-  .btn-action { font-size: 10px; padding: 6px 2px; min-width: 54px; }
-
   /* Log sidebar full-screen on mobile */
   .log-sidebar { width: 100%; right: -100%; }
 
-  /* Trade section stacks */
-  .trade-section { flex-direction: column; }
-  .trade-arrow   { align-self: center; transform: rotate(90deg); }
+  /* ── Trade modal fix on mobile ── */
+  .modal-overlay { padding: 8px; align-items: flex-end; }
+  .modal-card { max-height: calc(100dvh - 16px); display: flex; flex-direction: column; }
+  .modal-body { overflow-y: auto; flex: 1; padding: 12px; }
+  .modal-wide { max-width: 100%; }
+
+  .trade-section {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .trade-arrow {
+    align-self: center;
+    transform: rotate(90deg);
+    margin: -4px 0;
+  }
+  .trade-col { width: 100%; }
+  .prop-checkboxes { max-height: 100px; }
+
+  /* Modal footer stays visible */
+  .modal-footer { flex-shrink: 0; padding: 10px 12px 12px; }
 }
 
 /* Scrollbar */
