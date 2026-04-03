@@ -850,8 +850,25 @@ html, body {
 }
 .btn-house-plus  { background: var(--green-dk); color: white; }
 .btn-house-minus { background: #c62828; color: white; }
+.btn-mortgage    { background: #5d4037; color: #ffe0b2; font-size: 11px; }
+.btn-unmortgage  { background: #1565c0; color: white;  font-size: 11px; }
 .btn-build-action:disabled { opacity: 0.3; cursor: not-allowed; }
 .btn-build-action:not(:disabled):hover { filter: brightness(1.2); }
+
+/* Mortgaged property row */
+.build-row-mortgaged { opacity: 0.7; background: #2a2010; }
+.build-mortgaged-badge {
+  font-size: 9px; background: #c62828; color: white;
+  padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px;
+  vertical-align: middle; margin-left: 4px;
+}
+
+/* Mortgaged tile overlay — grey diagonal stripe on owned strip */
+.tile-owned-strip.mortgaged {
+  background: repeating-linear-gradient(
+    45deg, #888 0px, #888 3px, transparent 3px, transparent 6px
+  ) !important;
+}
 
 /* Trade columns */
 .trade-section {
