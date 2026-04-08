@@ -617,6 +617,12 @@ function handlePhaseModals(state, isMyTurn) {
   } else {
     closeModal('modal-event');
   }
+
+  if (phase === 'AUCTION') {
+    updateAuctionModal(state);
+  } else {
+    closeModal('modal-auction');
+  }
 }
 
 function showEventModal(phase, eventText, isMyTurn) {
@@ -644,6 +650,98 @@ function dismissEventModal() {
   lastShownPhaseEvent = null;
   doEnd();
 }
+
+// ── AUCTION ────────────────────────────────────────────────────────────────
+let lastAuctionKey = null;
+
+function updateAuctionModal(state) {
+  const auc = state.auction; // { propPos, bids:[{playerId,amount}], passed:[playerId], finished, winnerId }
+  if (!auc) return;
+
+  const prop  = state.props?.[auc.propPos];
+  const tile  = BOARD_TILES.find(t => t.pos === auc.propPos);
+  const color = prop?.colorGroup ? COLOR_MAP[prop.colorGroup] : '#ccc';
+  const me    = myPlayer(state);
+
+  // Populate static info once
+  document.getElementById('auc-color-bar').style.background = color;
+  document.getElementById('auc-prop-name').textContent      = tile?.name || 'Property';
+  document.getElementById('auc-start-price').textContent    = '₹' + (prop?.price || 0);
+
+  // High bid
+  const bids    = auc.bids || [];
+  const highBid = bids.length ? bids[bids.length - 1] : null;
+  document.getElementById('auc-high-amount').textContent = highBid ? '₹' + highBid.amount : '₹0';
+  document.getElementById('auc-high-by').textContent     = highBid
+    ? getPlayerName(highBid.playerId, state) : '— no bids yet —';
+
+  // Bid log
+  const logEl = document.getElementById('auc-log');
+  const aucKey = JSON.stringify(bids);
+  if (aucKey !== lastAuctionKey) {
+    lastAuctionKey = aucKey;
+    logEl.innerHTML = bids.map(b =>
+      `<div class="auction-log-entry"><span class="auc-bidder">${getPlayerName(b.playerId, state)}</span> bid <strong>₹${b.amount}</strong></div>`
+    ).join('');
+    if (auc.finished && auc.winnerId) {
+      logEl.innerHTML += `<div class="auction-log-entry"><span class="auc-winner">🏆 ${getPlayerName(auc.winnerId, state)} wins!</span></div>`;
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // My state
+  const myBalance    = me?.money || 0;
+  const minBid       = (highBid?.amount || 0) + 1;
+  const iHavePassed  = (auc.passed || []).includes(myPlayerId);
+  const canAffordMin = myBalance >= minBid;
+  const inputWrap    = document.getElementById('auc-input-wrap');
+  const spectateMsg  = document.getElementById('auc-spectate-msg');
+  const passBtn      = document.getElementById('auc-pass-btn');
+  const bidInput     = document.getElementById('auc-bid-input');
+  const balanceHint  = document.getElementById('auc-balance-hint');
+
+  if (auc.finished) {
+    inputWrap.style.display  = 'none';
+    spectateMsg.style.display = 'block';
+    spectateMsg.textContent  = auc.winnerId
+      ? `🏆 ${getPlayerName(auc.winnerId, state)} won for ₹${highBid?.amount}`
+      : 'No winner — property stays unowned.';
+    passBtn.style.display = 'none';
+    openModal('modal-auction');
+    return;
+  }
+
+  if (iHavePassed || !canAffordMin) {
+    inputWrap.style.display   = 'none';
+    spectateMsg.style.display = 'block';
+    spectateMsg.textContent   = iHavePassed ? 'You passed.' : `Can't afford min bid (₹${minBid})`;
+    passBtn.style.display     = 'none';
+  } else {
+    inputWrap.style.display   = '';
+    spectateMsg.style.display = 'none';
+    bidInput.min   = minBid;
+    bidInput.value = minBid;
+    balanceHint.textContent = `Your balance: ₹${myBalance}`;
+    passBtn.style.display = '';
+    passBtn.textContent   = 'PASS';
+  }
+
+  openModal('modal-auction');
+}
+
+function submitAuctionBid() {
+  const amt = parseInt(document.getElementById('auc-bid-input').value, 10);
+  const me  = myPlayer(gameState);
+  if (!amt || amt < 1) return;
+  if (me && amt > me.money) { showToast('Not enough money!'); return; }
+  send('/auction-bid', { gameId: currentGameId, playerId: myPlayerId, amount: amt });
+}
+
+function submitAuctionPass() {
+  send('/auction-pass', { gameId: currentGameId, playerId: myPlayerId });
+}
+
+
 
 // ── EVENT LOG ─────────────────────────────────────────────────────────────
 function updateEventLog(state) {
@@ -1018,14 +1116,13 @@ function renderBoardBuildings(state) {
 
 // ── ACTION BUTTONS ─────────────────────────────────────────────────────────
 function updateActionButtons(state, isMyTurn, phase) {
-  const btnRoll     = document.getElementById('btn-roll');
-  const btnBuy      = document.getElementById('btn-buy');
-  const btnBuild    = document.getElementById('btn-build');
-  const btnMortgage = document.getElementById('btn-mortgage-quick');
-  const btnTrade    = document.getElementById('btn-trade');
-  const btnEnd      = document.getElementById('btn-end');
+  const btnRoll  = document.getElementById('btn-roll');
+  const btnBuy   = document.getElementById('btn-buy');
+  const btnBuild = document.getElementById('btn-build');
+  const btnTrade = document.getElementById('btn-trade');
+  const btnEnd   = document.getElementById('btn-end');
 
-  [btnRoll, btnBuy, btnBuild, btnMortgage, btnTrade, btnEnd].forEach(b => { if(b) b.disabled = true; });
+  [btnRoll, btnBuy, btnBuild, btnTrade, btnEnd].forEach(b => b.disabled = true);
 
   if (!isMyTurn || state.finished) return;
 
@@ -1038,15 +1135,20 @@ function updateActionButtons(state, isMyTurn, phase) {
     const me = myPlayer(state);
     if (me && state.props) {
       const prop = state.props[me.pos];
-      if (prop && !prop.owner && me.money >= prop.price) {
-        btnBuy.disabled = false;
-        showBuyPopup(prop, me);
+      if (prop && !prop.owner) {
+        if (me.money >= prop.price) {
+          btnBuy.disabled = false;
+          showBuyPopup(prop, me);
+        } else {
+          // Can't afford — server should trigger AUCTION phase;
+          // client just shows a toast hint if still in ACTION
+          showToast(`Can't afford — auction will start!`);
+        }
       }
     }
-    btnBuild.disabled    = false;
-    if (btnMortgage) btnMortgage.disabled = false;
-    btnTrade.disabled    = false;
-    btnEnd.disabled      = false;
+    btnBuild.disabled = false;
+    btnTrade.disabled = false;
+    btnEnd.disabled   = false;
     return;
   }
 
@@ -1054,7 +1156,6 @@ function updateActionButtons(state, isMyTurn, phase) {
   // END: just the end button
   if (phase === 'END') {
     btnEnd.disabled = false;
-    if (btnMortgage) btnMortgage.disabled = false;
   }
 }
 
@@ -1117,32 +1218,37 @@ function openBuild() {
   const buildList = document.getElementById('build-list');
   buildList.innerHTML = '';
 
-  // Only developable (colour group) properties for building houses
+  // All owned props — houses only on colour groups, mortgage on everything
   const myProps = (me.props || []).map(pos => gameState.props?.[pos]).filter(Boolean);
-  const developable = myProps.filter(p => p.colorGroup !== 'RAILROAD' && p.colorGroup !== 'UTILITY');
 
-  if (developable.length === 0) {
-    buildList.innerHTML = '<div style="color:#888;padding:10px">No colour-group properties to build on</div>';
+  if (myProps.length === 0) {
+    buildList.innerHTML = '<div style="color:#888;padding:10px">No properties owned</div>';
     openModal('modal-build');
     return;
   }
 
+  // Section header
   buildList.innerHTML = `
     <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#aaa;
                 text-transform:uppercase;padding:2px 4px 6px">
-      BUILD HOUSES / HOTELS
+      BUILD &amp; MORTGAGE
     </div>`;
 
-  developable.forEach(prop => {
+  myProps.forEach(prop => {
     const tile         = BOARD_TILES.find(t => t.pos === prop.pos);
     const color        = COLOR_MAP[prop.colorGroup] || '#ccc';
-    const hasMonopoly  = ownsFullGroup(me, prop.colorGroup);
+    const isDevelopable = prop.colorGroup !== 'RAILROAD' && prop.colorGroup !== 'UTILITY';
+    const hasMonopoly  = isDevelopable && ownsFullGroup(me, prop.colorGroup);
+    const mortgageValue = Math.round((prop.price || 0) / 2);
+    const unmortgageCost = Math.round(mortgageValue * 1.1); // 10% interest
 
-    const housesLabel = prop.houses === 5
-      ? '🏨 Hotel'
-      : prop.houses > 0
-        ? `${'🏠'.repeat(prop.houses)} ${prop.houses} house${prop.houses !== 1 ? 's' : ''}`
-        : '0 houses';
+    const housesLabel = !isDevelopable
+      ? (prop.colorGroup === 'RAILROAD' ? '🚂 Railroad' : '⚡ Utility')
+      : prop.houses === 5
+        ? '🏨 Hotel'
+        : prop.houses > 0
+          ? `${'🏠'.repeat(prop.houses)} ${prop.houses} house${prop.houses !== 1 ? 's' : ''}`
+          : '0 houses';
 
     const mortgagedBadge = prop.mortgaged
       ? '<span class="build-mortgaged-badge">MORTGAGED</span>' : '';
@@ -1153,71 +1259,17 @@ function openBuild() {
       <div class="build-prop-color" style="background:${prop.mortgaged ? '#888' : color}"></div>
       <div class="build-prop-info">
         <div class="build-prop-name">${tile?.name || 'Property'} ${mortgagedBadge}</div>
-        <div class="build-prop-houses">${housesLabel}${prop.housePrice ? ' · ₹' + prop.housePrice + '/house' : ''}</div>
+        <div class="build-prop-houses">${housesLabel}${isDevelopable && prop.housePrice ? ' · ₹' + prop.housePrice + '/house' : ''}</div>
       </div>
       <div class="build-btns">
+        ${isDevelopable ? `
         <button class="btn-build-action btn-house-plus"
           ${prop.mortgaged || !hasMonopoly || prop.houses >= 5 || me.money < (prop.housePrice||0) ? 'disabled' : ''}
           title="Build house">+🏠</button>
         <button class="btn-build-action btn-house-minus"
           ${prop.mortgaged || (prop.houses || 0) === 0 ? 'disabled' : ''}
           title="Sell house">−🏠</button>
-      </div>
-    `;
-
-    const plusBtn  = row.querySelector('.btn-house-plus');
-    const minusBtn = row.querySelector('.btn-house-minus');
-    if (plusBtn)  plusBtn.addEventListener('click',  () => doBuild(prop.pos, 1));
-    if (minusBtn) minusBtn.addEventListener('click', () => doBuild(prop.pos, -1));
-
-    buildList.appendChild(row);
-  });
-
-  openModal('modal-build');
-}
-
-function openMortgage() {
-  if (!gameState) return;
-  const me = myPlayer(gameState);
-  if (!me) return;
-
-  const mortgageList = document.getElementById('mortgage-list');
-  mortgageList.innerHTML = '';
-
-  const myProps = (me.props || []).map(pos => gameState.props?.[pos]).filter(Boolean);
-
-  if (myProps.length === 0) {
-    mortgageList.innerHTML = '<div style="color:#888;padding:10px">No properties owned</div>';
-    openModal('modal-mortgage');
-    return;
-  }
-
-  mortgageList.innerHTML = `
-    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#aaa;
-                text-transform:uppercase;padding:2px 4px 6px">
-      MORTGAGE / UNMORTGAGE
-    </div>`;
-
-  myProps.forEach(prop => {
-    const tile           = BOARD_TILES.find(t => t.pos === prop.pos);
-    const color          = COLOR_MAP[prop.colorGroup] || '#ccc';
-    const mortgageValue  = Math.round((prop.price || 0) / 2);
-    const unmortgageCost = Math.round(mortgageValue * 1.1);
-
-    const mortgagedBadge = prop.mortgaged
-      ? '<span class="build-mortgaged-badge">MORTGAGED</span>' : '';
-
-    const row = document.createElement('div');
-    row.className = 'build-row' + (prop.mortgaged ? ' build-row-mortgaged' : '');
-    row.innerHTML = `
-      <div class="build-prop-color" style="background:${prop.mortgaged ? '#888' : color}"></div>
-      <div class="build-prop-info">
-        <div class="build-prop-name">${tile?.name || 'Property'} ${mortgagedBadge}</div>
-        <div class="build-prop-houses" style="font-size:11px;color:#aaa">
-          ${prop.mortgaged ? `Unmortgage: ₹${unmortgageCost}` : `Mortgage value: ₹${mortgageValue}`}
-        </div>
-      </div>
-      <div class="build-btns">
+        ` : ''}
         ${!prop.mortgaged ? `
         <button class="btn-build-action btn-mortgage"
           ${(prop.houses || 0) > 0 ? 'disabled' : ''}
@@ -1232,10 +1284,16 @@ function openMortgage() {
       </div>
     `;
 
-    mortgageList.appendChild(row);
+    // Wire up house buttons separately to avoid inline onclick issues with template
+    const plusBtn  = row.querySelector('.btn-house-plus');
+    const minusBtn = row.querySelector('.btn-house-minus');
+    if (plusBtn)  plusBtn.addEventListener('click',  () => doBuild(prop.pos, 1));
+    if (minusBtn) minusBtn.addEventListener('click', () => doBuild(prop.pos, -1));
+
+    buildList.appendChild(row);
   });
 
-  openModal('modal-mortgage');
+  openModal('modal-build');
 }
 
 function ownsFullGroup(player, colorGroup) {

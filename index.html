@@ -128,14 +128,11 @@
 
       <!-- Action buttons -->
       <div class="action-btns" id="action-btns">
-        <button class="btn-action btn-roll"     id="btn-roll"     onclick="doRoll()"       disabled>🎲 ROLL</button>
-        <button class="btn-action btn-buy"      id="btn-buy"      onclick="doBuy()"        disabled>🏠 BUY</button>
-        <div class="build-mortgage-row">
-          <button class="btn-action btn-build"    id="btn-build"    onclick="openBuild()"    disabled>🏗 BUILD</button>
-          <button class="btn-action btn-mortgage-quick" id="btn-mortgage-quick" onclick="openMortgage()" disabled>🏦 MORTGAGE</button>
-        </div>
-        <button class="btn-action btn-trade"     id="btn-trade"    onclick="openTrade()"    disabled>🤝 TRADE</button>
-        <button class="btn-action btn-end"       id="btn-end"      onclick="doEnd()"        disabled>✅ END TURN</button>
+        <button class="btn-action btn-roll"  id="btn-roll"  onclick="doRoll()"    disabled>🎲 ROLL</button>
+        <button class="btn-action btn-buy"   id="btn-buy"   onclick="doBuy()"     disabled>🏠 BUY</button>
+        <button class="btn-action btn-build" id="btn-build" onclick="openBuild()" disabled>🏗 BUILD</button>
+        <button class="btn-action btn-trade" id="btn-trade" onclick="openTrade()" disabled>🤝 TRADE</button>
+        <button class="btn-action btn-end"   id="btn-end"   onclick="doEnd()"     disabled>✅ END TURN</button>
       </div>
 
       <!-- Log lives in the sidebar — game-log id kept for JS compatibility -->
@@ -162,6 +159,45 @@
     <div class="modal-footer">
       <button class="btn-modal btn-confirm" onclick="confirmBuy()">BUY ₹<span id="buy-confirm-price">0</span></button>
       <button class="btn-modal btn-cancel"  onclick="closeModal('modal-buy')">PASS</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auction popup -->
+<div class="modal-overlay" id="modal-auction">
+  <div class="modal-card">
+    <div class="modal-header modal-auction-header">🔨 AUCTION</div>
+    <div class="modal-body" style="padding:14px 16px">
+      <div class="auction-prop-row">
+        <div class="prop-color-bar" id="auc-color-bar" style="height:10px;border-radius:4px;margin-bottom:8px"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="prop-name" id="auc-prop-name" style="font-size:18px">—</span>
+          <span style="font-size:12px;color:#888">Starting: <strong id="auc-start-price" style="color:var(--saffron)">₹0</strong></span>
+        </div>
+      </div>
+      <!-- Current high bid -->
+      <div class="auction-bid-display">
+        <div class="auction-bid-label">HIGHEST BID</div>
+        <div class="auction-bid-amount" id="auc-high-amount">₹0</div>
+        <div class="auction-bid-by" id="auc-high-by">— no bids yet —</div>
+      </div>
+      <!-- Bid log -->
+      <div class="auction-log" id="auc-log"></div>
+      <!-- Your bid input -->
+      <div id="auc-input-wrap" class="auction-input-wrap">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#888;margin-bottom:5px">YOUR BID</div>
+        <div style="display:flex;gap:6px">
+          <input type="number" id="auc-bid-input" class="auction-bid-input" placeholder="₹" min="1"/>
+          <button class="btn-modal btn-confirm" style="flex:0 0 auto;padding:8px 16px" onclick="submitAuctionBid()">BID</button>
+        </div>
+        <div id="auc-balance-hint" style="font-size:11px;color:#888;margin-top:4px"></div>
+      </div>
+      <div id="auc-spectate-msg" style="display:none;text-align:center;color:#aaa;font-size:13px;padding:8px 0">
+        Watching auction…
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:center">
+      <button class="btn-modal btn-cancel" id="auc-pass-btn" onclick="submitAuctionPass()">PASS</button>
     </div>
   </div>
 </div>
@@ -229,19 +265,6 @@
     <div class="modal-footer">
       <button class="btn-modal btn-confirm" onclick="respondTrade('accept')">✅ ACCEPT</button>
       <button class="btn-modal btn-cancel"  onclick="respondTrade('reject')">❌ REJECT</button>
-    </div>
-  </div>
-</div>
-
-<!-- Mortgage / Unmortgage quick popup -->
-<div class="modal-overlay" id="modal-mortgage">
-  <div class="modal-card modal-wide">
-    <div class="modal-header">🏦 MORTGAGE / UNMORTGAGE</div>
-    <div class="modal-body">
-      <div class="build-list" id="mortgage-list"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-modal btn-cancel" onclick="closeModal('modal-mortgage')">CLOSE</button>
     </div>
   </div>
 </div>

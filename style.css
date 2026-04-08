@@ -778,19 +778,6 @@ html, body {
 .btn-trade { background: linear-gradient(135deg, #4A148C, #7B1FA2); color: white; }
 .btn-end   { background: linear-gradient(135deg, #880E4F, #AD1457); color: white; }
 
-/* Build + Mortgage side-by-side row */
-.build-mortgage-row {
-  display: flex; gap: 6px;
-}
-.build-mortgage-row .btn-build {
-  flex: 1;
-}
-.btn-mortgage-quick {
-  background: linear-gradient(135deg, #5d4037, #795548);
-  color: #ffe0b2;
-  flex: 1;
-}
-
 .btn-action:not(:disabled):hover { filter: brightness(1.15); transform: translateX(2px); }
 .btn-action:not(:disabled):active { transform: translateX(0); }
 
@@ -1034,6 +1021,45 @@ html, body {
 .td-unowned { color: #888; font-size: 13px; margin-top: 4px; }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 
+/* ═══════════════════════ AUCTION ════════════════════════════════════════ */
+.modal-auction-header {
+  background: linear-gradient(135deg, #7B1FA2, #4A148C);
+}
+.auction-bid-display {
+  background: #1a1a2e;
+  border-radius: 10px;
+  text-align: center;
+  padding: 10px;
+  margin: 10px 0;
+}
+.auction-bid-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 2px; color: #888; text-transform: uppercase;
+}
+.auction-bid-amount {
+  font-family: 'Baloo 2', cursive;
+  font-size: 32px; font-weight: 800; color: var(--gold);
+  line-height: 1.1;
+}
+.auction-bid-by { font-size: 12px; color: #aaa; }
+.auction-log {
+  max-height: 80px; overflow-y: auto;
+  font-size: 11px; color: #aaa; line-height: 1.6;
+  padding: 4px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee;
+  margin-bottom: 10px;
+}
+.auction-log-entry { padding: 1px 0; }
+.auction-log-entry .auc-winner { color: #4CAF50; font-weight: 700; }
+.auction-log-entry .auc-bidder { color: var(--saffron); font-weight: 700; }
+.auction-input-wrap { }
+.auction-bid-input {
+  flex: 1; padding: 9px 12px;
+  border: 2px solid #e0d5b0; border-radius: 10px;
+  font-family: 'Rajdhani', sans-serif; font-size: 16px; font-weight: 600;
+  outline: none; background: white; width: 100%;
+}
+.auction-bid-input:focus { border-color: var(--purple); }
+.auction-bid-input:disabled { background: #f5f5f5; color: #aaa; }
+
 /* ═══════════════════════ RESPONSIVE ════════════════════════════════════ */
 
 /* ── Tablet (≤900px): side panels collapse, controls go under board ── */
@@ -1111,99 +1137,28 @@ html, body {
     font-size: 11px; padding: 8px 4px;
     text-align: center;
   }
-  .build-mortgage-row {
-    flex: 2;
-    min-width: 140px;
-  }
 }
 
-/* ── Mobile (≤600px): no vertical scroll, bigger tiles, fixed trade ── */
+/* ── Mobile (≤600px): player cards in board center, ultra-compact controls ── */
 @media (max-width: 600px) {
-  /* Prevent any body scroll — everything fits in viewport */
-  html, body { height: 100%; overflow: hidden; }
-
-  #game-screen {
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .game-topbar { padding: 4px 8px; min-height: 0; }
-  .game-logo   { font-size: 14px; letter-spacing: 1px; }
-  .phase-chip  { font-size: 9px; padding: 2px 6px; }
+  .game-topbar { padding: 6px 10px; }
+  .game-logo   { font-size: 15px; letter-spacing: 1px; }
+  .phase-chip  { font-size: 10px; padding: 3px 8px; }
   #topbar-room { display: none; }
-  .btn-leave   { font-size: 11px; padding: 4px 8px; }
 
   .game-layout {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1fr;
-    /* board fills most space, controls bar is fixed-height */
     grid-template-rows: 1fr auto;
-    padding: 0;
-    gap: 0;
-    min-height: 0;
-    overflow: hidden;
+    padding: 2px;
   }
 
-  /* Left panel hidden — player info in board center */
+  /* Left panel hidden — player info moves into board center via JS */
   .left-panel { display: none; }
 
-  /* Board fills remaining height */
-  .board-wrapper {
-    order: 1;
-    padding: 2px;
-    min-height: 0;
-    overflow: hidden;
-  }
+  /* Board fills width */
+  .board-wrapper { padding: 2px; }
   .board {
-    /* Square that fits whichever dimension is smaller after controls bar */
-    width: min(calc(100dvw - 4px), calc(100dvh - 120px));
-    height: min(calc(100dvw - 4px), calc(100dvh - 120px));
-  }
-
-  /* Bigger tile text on mobile */
-  .tile-name  { font-size: clamp(6.5px, 2.5vw, 11px); }
-  .tile-price { font-size: clamp(7px,   2.8vw, 12px); }
-  .tile-icon  { font-size: clamp(10px,  3.5vw, 18px); }
-  .corner-icon  { font-size: clamp(18px, 5vw, 28px); }
-  .corner-label { font-size: clamp(6px,  2vw, 9px); }
-  .tile-color-bar { height: 6px; }
-
-  /* Controls strip — compact fixed bar */
-  .right-panel {
-    order: 2;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    max-height: none;
-    height: auto;
-    overflow: visible;
-    border-radius: 0;
-    border: none;
-    border-top: 1px solid #333;
-    background: #161616;
-    padding: 4px 6px;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-  .right-panel .panel-title { display: none; }
-
-  .dice-display { margin: 0; gap: 6px; }
-  .die { width: 30px; height: 30px; font-size: 16px; }
-  .dice-total { font-size: 11px; min-width: 40px; }
-
-  .action-btns {
-    flex-direction: row;
-    flex-wrap: wrap;
-    flex: 1;
-    gap: 3px;
-  }
-  .btn-action { font-size: 9px; padding: 5px 2px; min-width: 48px; flex: 1; }
-  .build-mortgage-row {
-    flex: 2;
-    min-width: 96px;
-    gap: 3px;
+    width: min(99vw, 99vw);
+    height: min(99vw, 99vw);
   }
 
   /* Board center shows compact player cards */
@@ -1215,6 +1170,7 @@ html, body {
   }
   .board-center-title { display: none; }
 
+  /* Compact player mini-cards injected into center */
   .board-center-players {
     width: 100%;
     display: flex;
@@ -1247,29 +1203,17 @@ html, body {
   }
   .mini-money { color: var(--gold); font-size: 9px; }
 
+  /* Controls — even more compact */
+  .right-panel { gap: 4px; padding: 6px; }
+  .die { width: 34px; height: 34px; font-size: 18px; }
+  .btn-action { font-size: 10px; padding: 6px 2px; min-width: 54px; }
+
   /* Log sidebar full-screen on mobile */
   .log-sidebar { width: 100%; right: -100%; }
 
-  /* ── Trade modal fix on mobile ── */
-  .modal-overlay { padding: 8px; align-items: flex-end; }
-  .modal-card { max-height: calc(100dvh - 16px); display: flex; flex-direction: column; }
-  .modal-body { overflow-y: auto; flex: 1; padding: 12px; }
-  .modal-wide { max-width: 100%; }
-
-  .trade-section {
-    flex-direction: column;
-    gap: 10px;
-  }
-  .trade-arrow {
-    align-self: center;
-    transform: rotate(90deg);
-    margin: -4px 0;
-  }
-  .trade-col { width: 100%; }
-  .prop-checkboxes { max-height: 100px; }
-
-  /* Modal footer stays visible */
-  .modal-footer { flex-shrink: 0; padding: 10px 12px 12px; }
+  /* Trade section stacks */
+  .trade-section { flex-direction: column; }
+  .trade-arrow   { align-self: center; transform: rotate(90deg); }
 }
 
 /* Scrollbar */
